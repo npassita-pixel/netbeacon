@@ -1,0 +1,6 @@
+{
+  "functions": {
+    "api/scan.js": { "maxDuration": 30, "memory": 1024 },
+    "api/audit.js": { "maxDuration": 30 }
+  }
+}
