@@ -2,7 +2,7 @@
 // Vercel serverless function using Browserless.io for headless Chrome
 // Deploy: add BROWSERLESS_API_KEY to Vercel environment variables
 
-export const config = { maxDuration: 30 };
+// Config exported at bottom (CommonJS)
 
 // ── 36 WCAG checks injected into headless page ─────────────────────────────
 const SCANNER_SCRIPT = `
@@ -22,7 +22,7 @@ const SCANNER_SCRIPT = `
   // 1.1.1 Missing alt text
   var imgs = document.querySelectorAll('img');
   var badImgs = Array.from(imgs).filter(function(img) {
-    return !img.hasAttribute('alt') || (img.getAttribute('alt').trim() === '' && !img.getAttribute('role') === 'presentation');
+    return !img.hasAttribute('alt') || (img.getAttribute('alt').trim() === '' && img.getAttribute('role') !== 'presentation');
   });
   if (badImgs.length) push('1.1.1','critical','1.1.1','Missing alt text on '+badImgs.length+' image(s)','Images must have descriptive alt text for screen readers.',badImgs[0]);
   else pass('1.1.1','Alt text present on all images');
@@ -262,7 +262,7 @@ const SCANNER_SCRIPT = `
 })();
 `;
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -324,4 +324,7 @@ export default async function handler(req, res) {
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
-}
+};
+
+module.exports.config = { maxDuration: 30 };
+

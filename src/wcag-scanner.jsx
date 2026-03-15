@@ -779,13 +779,24 @@ export default function App() {
           }
         } catch {
           setProgress("Fetching via proxy…"); setProgressPct(20);
-          try {
-            const r = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
-            if (r.ok) {
-              const d = await r.json();
-              html = d.contents || "";
-            }
-          } catch { html = ""; }
+
+          // Try multiple CORS proxies in order until one works
+          const proxies = [
+            u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+            u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+            u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+          ];
+          for (const makeUrl of proxies) {
+            if (html) break;
+            try {
+              const r = await fetch(makeUrl(url));
+              if (r.ok) {
+                html = await r.text();
+                if (html && html.length > 100) break;
+                html = "";
+              }
+            } catch { /* try next proxy */ }
+          }
 
           if (!html) {
             setProgress("Proxy fetch failed — running AI-only audit…");
@@ -868,76 +879,114 @@ Respond ONLY with valid JSON. No markdown, no code fences, no preamble. Pure JSO
       const isVercel = isVercelDeploy;
 
       let d;
-      if (isVercel) {
-        const res = await fetch("/api/audit", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt })
-        });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(`AI audit failed (${res.status}): ${errData.error?.message || res.statusText}`);
+      let aiFailed = false;
+      try {
+        if (isVercel) {
+          const res = await fetch("/api/audit", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt })
+          });
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(`AI audit failed (${res.status}): ${errData.error?.message || res.statusText}`);
+          }
+          d = await res.json();
+        } else {
+          // Artifact / local preview — direct browser call
+          const res = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": apiKey,
+              "anthropic-version": "2023-06-01",
+              "anthropic-dangerous-direct-browser-access": "true"
+            },
+            body: JSON.stringify({
+              model: "claude-3-5-sonnet-20241022",
+              max_tokens: 4000,
+              messages: [{ role: "user", content: prompt }]
+            })
+          });
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(`AI audit failed (${res.status}): ${errData.error?.message || res.statusText}`);
+          }
+          d = await res.json();
         }
-        d = await res.json();
-      } else {
-        // Artifact / local preview — direct browser call
-        const res = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-key": apiKey,
-            "anthropic-version": "2023-06-01",
-            "anthropic-dangerous-direct-browser-access": "true"
-          },
-          body: JSON.stringify({
-            model: "claude-3-5-sonnet-20241022",
-            max_tokens: 4000,
-            messages: [{ role: "user", content: prompt }]
-          })
-        });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(`AI audit failed (${res.status}): ${errData.error?.message || res.statusText}`);
-        }
-        d = await res.json();
+      } catch (aiErr) {
+        console.warn("AI audit unavailable, using automated results only:", aiErr.message);
+        aiFailed = true;
       }
 
       setProgressPct(88);
 
-      if (!d.content?.length) throw new Error("Empty response from AI");
-
-      const rawText = d.content.map(i => i.text || "").join("").trim();
-      // Strip any accidental markdown fences
-      const jsonText = rawText.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
-
       let parsed;
-      try {
-        parsed = JSON.parse(jsonText);
-      } catch(parseErr) {
-        // Try to extract JSON object if there's surrounding text
-        const match = jsonText.match(/\{[\s\S]*\}/);
-        if (match) {
-          parsed = JSON.parse(match[0]);
-        } else {
-          throw new Error("AI returned invalid JSON. Try scanning again.");
+
+      if (aiFailed && headlessData) {
+        // AI unavailable but headless scan succeeded — use headless results directly
+        setProgress("AI unavailable — using automated scan results…");
+        const sevMap = { critical: "Perceivable", serious: "Operable", moderate: "Understandable", minor: "Robust" };
+        parsed = {
+          score: headlessData.score,
+          summary: `Automated scan completed. ${headlessData.issues?.length || 0} issue(s) found. AI analysis was unavailable — results are from automated WCAG checks only.`,
+          level: headlessData.score >= 90 ? "AA" : headlessData.score >= 50 ? "Partial" : "Non-Compliant",
+          adaRisk: headlessData.score >= 90 ? "Low" : headlessData.score >= 70 ? "Medium" : headlessData.score >= 40 ? "High" : "Critical",
+          issues: (headlessData.issues || []).map(i => ({
+            title: i.title,
+            severity: i.sev,
+            wcag: i.wcag,
+            principle: sevMap[i.sev] || "Robust",
+            description: i.detail,
+            element: i.snippet || null,
+            fix: `Address WCAG ${i.wcag} — ${i.title}`
+          })),
+          passes: headlessData.passes || [],
+          stats: {
+            critical: (headlessData.issues || []).filter(i => i.sev === "critical").length,
+            serious: (headlessData.issues || []).filter(i => i.sev === "serious").length,
+            moderate: (headlessData.issues || []).filter(i => i.sev === "moderate").length,
+            minor: (headlessData.issues || []).filter(i => i.sev === "minor").length,
+          }
+        };
+      } else if (aiFailed) {
+        // Both AI and headless failed — show what we can
+        throw new Error("Scanner services are temporarily unavailable. Please try again in a few minutes.");
+      } else {
+        if (!d.content?.length) throw new Error("Empty response from AI");
+
+        const rawText = d.content.map(i => i.text || "").join("").trim();
+        // Strip any accidental markdown fences
+        const jsonText = rawText.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
+
+        try {
+          parsed = JSON.parse(jsonText);
+        } catch(parseErr) {
+          // Try to extract JSON object if there's surrounding text
+          const match = jsonText.match(/\{[\s\S]*\}/);
+          if (match) {
+            parsed = JSON.parse(match[0]);
+          } else {
+            throw new Error("AI returned invalid JSON. Try scanning again.");
+          }
         }
-      }
 
-      // Validate required fields
-      if (!parsed.score && parsed.score !== 0) parsed.score = headlessData?.score || 50;
-      if (!parsed.issues) parsed.issues = [];
-      if (!parsed.passes) parsed.passes = [];
-      if (!parsed.stats) parsed.stats = { critical:0, serious:0, moderate:0, minor:0 };
+        // Validate required fields
+        if (!parsed.score && parsed.score !== 0) parsed.score = headlessData?.score || 50;
+        if (!parsed.issues) parsed.issues = [];
+        if (!parsed.passes) parsed.passes = [];
+        if (!parsed.stats) parsed.stats = { critical:0, serious:0, moderate:0, minor:0 };
 
-      // Score: trust headless score over AI when headless is available
-      // Only blend if they agree within 15 points; otherwise trust headless
-      if (headlessData?.score != null) {
-        const diff = Math.abs(parsed.score - headlessData.score);
-        if (diff <= 15) {
-          parsed.score = headlessData.score; // headless is more reliable
-        } else {
-          // Large disagreement — trust headless, note AI found more
-          parsed.score = Math.round(headlessData.score * 0.7 + parsed.score * 0.3);
+        // Score: trust headless score over AI when headless is available
+        // Only blend if they agree within 15 points; otherwise trust headless
+        if (headlessData?.score != null) {
+          const diff = Math.abs(parsed.score - headlessData.score);
+          if (diff <= 15) {
+            parsed.score = headlessData.score; // headless is more reliable
+          } else {
+            // Large disagreement — trust headless, note AI found more
+            parsed.score = Math.round(headlessData.score * 0.7 + parsed.score * 0.3);
+          }
         }
       }
 
@@ -1027,7 +1076,7 @@ Respond ONLY with valid JSON. No markdown, no code fences, no preamble. Pure JSO
 
           {inputMode === "url" && (
             <div style={{ display:"flex", gap:9 }}>
-              <input value={url} onChange={e=>setUrl(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!loading&&scan()}
+              <input id="scan-url" name="scan-url" value={url} onChange={e=>setUrl(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!loading&&scan()}
                 placeholder="https://yourwebsite.com"
                 style={{ flex:1, border:`1.5px solid ${C.border}`, borderRadius:9, padding:"11px 15px", fontSize:14, fontFamily:"inherit", color:C.text, outline:"none", background:C.surface, transition:"border-color .15s" }}
                 onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}
@@ -1045,7 +1094,7 @@ Respond ONLY with valid JSON. No markdown, no code fences, no preamble. Pure JSO
                 </p>
               </div>
               <div style={{ display:"flex", gap:9, marginBottom:9 }}>
-                <textarea value={pastedHtml} onChange={e=>setPastedHtml(e.target.value)} placeholder="Paste full page HTML here…" rows={5}
+                <textarea id="paste-html" name="paste-html" value={pastedHtml} onChange={e=>setPastedHtml(e.target.value)} placeholder="Paste full page HTML here…" rows={5}
                   style={{ flex:1, border:`1.5px solid ${C.border}`, borderRadius:9, padding:"11px 15px", fontSize:12, fontFamily:"monospace", color:C.text, outline:"none", background:C.surface, transition:"border-color .15s", lineHeight:1.5 }}
                   onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}
                 />
@@ -1054,7 +1103,7 @@ Respond ONLY with valid JSON. No markdown, no code fences, no preamble. Pure JSO
                   {pastedHtml && <Btn variant="secondary" small onClick={()=>setPastedHtml("")}>Clear</Btn>}
                 </div>
               </div>
-              <input value={url} onChange={e=>setUrl(e.target.value)} placeholder="Optional: URL (helps resolve image paths)"
+              <input id="paste-url" name="paste-url" value={url} onChange={e=>setUrl(e.target.value)} placeholder="Optional: URL (helps resolve image paths)"
                 style={{ width:"100%", border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 13px", fontSize:12, fontFamily:"inherit", color:C.textSub, outline:"none", background:C.bg }}
               />
             </div>
@@ -1070,10 +1119,13 @@ Respond ONLY with valid JSON. No markdown, no code fences, no preamble. Pure JSO
                 On Vercel this is stored securely as an env var — never shown to users.
               </div>
               <input
+                id="api-key"
+                name="api-key"
                 type="password"
                 value={apiKey}
                 onChange={e => setApiKey(e.target.value)}
                 placeholder="sk-ant-api03-..."
+                autoComplete="off"
                 style={{ width:"100%", border:`1.5px solid ${apiKey ? C.green : "#FCD34D"}`, borderRadius:7, padding:"8px 12px", fontSize:13, fontFamily:"inherit", outline:"none", background:"#fff", color:C.text }}
               />
             </div>
