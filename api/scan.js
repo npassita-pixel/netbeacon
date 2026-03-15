@@ -22,7 +22,7 @@ const SCANNER_SCRIPT = `
   // 1.1.1 Missing alt text
   var imgs = document.querySelectorAll('img');
   var badImgs = Array.from(imgs).filter(function(img) {
-    return !img.hasAttribute('alt') || (img.getAttribute('alt').trim() === '' && !img.getAttribute('role') === 'presentation');
+    return !img.hasAttribute('alt') || (img.getAttribute('alt').trim() === '' && img.getAttribute('role') !== 'presentation');
   });
   if (badImgs.length) push('1.1.1','critical','1.1.1','Missing alt text on '+badImgs.length+' image(s)','Images must have descriptive alt text for screen readers.',badImgs[0]);
   else pass('1.1.1','Alt text present on all images');
