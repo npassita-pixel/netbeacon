@@ -1,7 +1,6 @@
 // api/audit.js — Beacon AI audit proxy (Vercel serverless)
-export const config = { maxDuration: 30 };
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -42,4 +41,6 @@ export default async function handler(req, res) {
   } catch (err) {
     return res.status(500).json({ error: err.message, stack: err.stack?.slice(0, 200) });
   }
-}
+};
+
+module.exports.config = { maxDuration: 30 };
