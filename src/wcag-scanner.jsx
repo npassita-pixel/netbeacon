@@ -1026,7 +1026,7 @@ Respond ONLY with valid JSON. No markdown, no code fences, no preamble. Pure JSO
 
           {inputMode === "url" && (
             <div style={{ display:"flex", gap:9 }}>
-              <input value={url} onChange={e=>setUrl(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!loading&&scan()}
+              <input id="scan-url" name="scan-url" value={url} onChange={e=>setUrl(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!loading&&scan()}
                 placeholder="https://yourwebsite.com"
                 style={{ flex:1, border:`1.5px solid ${C.border}`, borderRadius:9, padding:"11px 15px", fontSize:14, fontFamily:"inherit", color:C.text, outline:"none", background:C.surface, transition:"border-color .15s" }}
                 onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}
@@ -1044,7 +1044,7 @@ Respond ONLY with valid JSON. No markdown, no code fences, no preamble. Pure JSO
                 </p>
               </div>
               <div style={{ display:"flex", gap:9, marginBottom:9 }}>
-                <textarea value={pastedHtml} onChange={e=>setPastedHtml(e.target.value)} placeholder="Paste full page HTML here…" rows={5}
+                <textarea id="paste-html" name="paste-html" value={pastedHtml} onChange={e=>setPastedHtml(e.target.value)} placeholder="Paste full page HTML here…" rows={5}
                   style={{ flex:1, border:`1.5px solid ${C.border}`, borderRadius:9, padding:"11px 15px", fontSize:12, fontFamily:"monospace", color:C.text, outline:"none", background:C.surface, transition:"border-color .15s", lineHeight:1.5 }}
                   onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border}
                 />
@@ -1053,7 +1053,7 @@ Respond ONLY with valid JSON. No markdown, no code fences, no preamble. Pure JSO
                   {pastedHtml && <Btn variant="secondary" small onClick={()=>setPastedHtml("")}>Clear</Btn>}
                 </div>
               </div>
-              <input value={url} onChange={e=>setUrl(e.target.value)} placeholder="Optional: URL (helps resolve image paths)"
+              <input id="paste-url" name="paste-url" value={url} onChange={e=>setUrl(e.target.value)} placeholder="Optional: URL (helps resolve image paths)"
                 style={{ width:"100%", border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 13px", fontSize:12, fontFamily:"inherit", color:C.textSub, outline:"none", background:C.bg }}
               />
             </div>
@@ -1069,10 +1069,13 @@ Respond ONLY with valid JSON. No markdown, no code fences, no preamble. Pure JSO
                 On Vercel this is stored securely as an env var — never shown to users.
               </div>
               <input
+                id="api-key"
+                name="api-key"
                 type="password"
                 value={apiKey}
                 onChange={e => setApiKey(e.target.value)}
                 placeholder="sk-ant-api03-..."
+                autoComplete="off"
                 style={{ width:"100%", border:`1.5px solid ${apiKey ? C.green : "#FCD34D"}`, borderRadius:7, padding:"8px 12px", fontSize:13, fontFamily:"inherit", outline:"none", background:"#fff", color:C.text }}
               />
             </div>
