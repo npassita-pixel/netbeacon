@@ -780,10 +780,9 @@ export default function App() {
         } catch {
           setProgress("Fetching via proxy…"); setProgressPct(20);
           try {
-            const r = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
+            const r = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`);
             if (r.ok) {
-              const d = await r.json();
-              html = d.contents || "";
+              html = await r.text();
             }
           } catch { html = ""; }
 

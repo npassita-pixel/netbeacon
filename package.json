@@ -1,6 +1,7 @@
 {
   "name": "beacon-accessibility",
   "version": "1.0.0",
+  "type": "module",
   "description": "Beacon — WCAG / ADA / Section 508 accessibility scanner",
   "scripts": {
     "dev": "vite",
