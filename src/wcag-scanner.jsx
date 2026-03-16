@@ -778,28 +778,45 @@ export default function App() {
             throw new Error("API " + r.status);
           }
         } catch {
-          setProgress("Fetching via proxy…"); setProgressPct(20);
+          setProgress("Fetching page content…"); setProgressPct(15);
 
-          // Try multiple CORS proxies in order until one works
-          const proxies = [
-            u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
-            u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
-            u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-          ];
-          for (const makeUrl of proxies) {
-            if (html) break;
-            try {
-              const r = await fetch(makeUrl(url));
-              if (r.ok) {
-                html = await r.text();
-                if (html && html.length > 100) break;
-                html = "";
+          // Try our own server-side fetch first (no CORS issues), then external proxies
+          try {
+            const fetchRes = await fetch("/api/fetch", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ url: url.trim() })
+            });
+            if (fetchRes.ok) {
+              const fetchData = await fetchRes.json();
+              if (fetchData.html && fetchData.html.length > 100) {
+                html = fetchData.html;
               }
-            } catch { /* try next proxy */ }
+            }
+          } catch { /* server fetch unavailable, try external proxies */ }
+
+          if (!html) {
+            setProgress("Trying external proxies…"); setProgressPct(20);
+            const proxies = [
+              u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+              u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+              u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+            ];
+            for (const makeUrl of proxies) {
+              if (html) break;
+              try {
+                const r = await fetch(makeUrl(url));
+                if (r.ok) {
+                  html = await r.text();
+                  if (html && html.length > 100) break;
+                  html = "";
+                }
+              } catch { /* try next proxy */ }
+            }
           }
 
           if (!html) {
-            setProgress("Proxy fetch failed — running AI-only audit…");
+            setProgress("Fetch failed — running AI-only audit…");
           }
 
           if (html) {
@@ -824,6 +841,86 @@ export default function App() {
               snippet: img.outerHTML.slice(0,250),
               context: img.closest("a") ? "Link image" : img.closest("button") ? "Button image" : "",
             })));
+
+            // Run client-side WCAG checks on the fetched HTML so we have fallback results
+            setProgress("Running local accessibility checks…"); setProgressPct(30);
+            const issues = [];
+            const passes = [];
+            const pushIssue = (id, sev, wcag, title, detail, el) => {
+              issues.push({ id, sev, wcag, title, detail, snippet: el ? el.outerHTML?.slice(0,120)||"" : "" });
+            };
+            const pushPass = (id, title) => { passes.push({ id, title }); };
+
+            // 1.1.1 Missing alt
+            const badImgs = allImgs.filter(img => !img.hasAttribute("alt") || (img.getAttribute("alt").trim() === "" && img.getAttribute("role") !== "presentation"));
+            if (badImgs.length) pushIssue("1.1.1","critical","1.1.1",`Missing alt text on ${badImgs.length} image(s)`,"Images must have descriptive alt text.",badImgs[0]);
+            else pushPass("1.1.1","Alt text present on all images");
+
+            // 1.3.1 Heading structure
+            const h1s = parsedDoc.querySelectorAll("h1");
+            if (h1s.length === 0) pushIssue("1.3.1a","serious","1.3.1","Missing H1 heading","Page has no H1.",null);
+            else if (h1s.length > 1) pushIssue("1.3.1b","moderate","1.3.1",`Multiple H1 headings (${h1s.length})`,"Only one H1 per page is recommended.",h1s[1]);
+            else pushPass("1.3.1","Single H1 present");
+
+            // 1.3.1 Unlabeled inputs
+            const unlabeled = Array.from(parsedDoc.querySelectorAll("input,select,textarea")).filter(inp => {
+              if (["hidden","submit","button","reset"].includes(inp.type)) return false;
+              const id = inp.id;
+              const hasLabel = id && parsedDoc.querySelector(`label[for="${id}"]`);
+              return !hasLabel && !inp.getAttribute("aria-label") && !inp.getAttribute("aria-labelledby") && !inp.getAttribute("title");
+            });
+            if (unlabeled.length) pushIssue("1.3.1d","critical","1.3.1",`${unlabeled.length} unlabeled form input(s)`,"Form fields must have labels.",unlabeled[0]);
+            else pushPass("1.3.1d","All form inputs have labels");
+
+            // 1.4.4 Zoom disabled
+            const vp = parsedDoc.querySelector("meta[name=viewport]");
+            if (vp && (vp.content.includes("user-scalable=no") || vp.content.includes("maximum-scale=1")))
+              pushIssue("1.4.4","serious","1.4.4","Zoom is disabled","user-scalable=no prevents zooming.",vp);
+            else pushPass("1.4.4","Zoom not disabled");
+
+            // 2.4.2 Page title
+            const docTitle = parsedDoc.querySelector("title");
+            if (!docTitle || docTitle.textContent.trim().length < 2) pushIssue("2.4.2","serious","2.4.2","Missing or empty page title","Every page must have a descriptive title.",null);
+            else pushPass("2.4.2","Page has a title");
+
+            // 3.1.1 Language
+            const lang = parsedDoc.documentElement.getAttribute("lang");
+            if (!lang || lang.trim().length < 2) pushIssue("3.1.1","serious","3.1.1","Page language not set","Add lang attribute to <html>.",parsedDoc.documentElement);
+            else pushPass("3.1.1","Page language set: " + lang);
+
+            // 4.1.2 Unnamed buttons
+            const unnamedBtns = Array.from(parsedDoc.querySelectorAll("button,[role=button]")).filter(el =>
+              !el.textContent.trim() && !el.getAttribute("aria-label") && !el.getAttribute("aria-labelledby") && !el.getAttribute("title")
+            );
+            if (unnamedBtns.length) pushIssue("4.1.2","critical","4.1.2",`${unnamedBtns.length} unnamed button(s)`,"Buttons must have accessible names.",unnamedBtns[0]);
+            else pushPass("4.1.2","All buttons have accessible names");
+
+            // Score
+            const dedMap = {critical:10,serious:8,moderate:5,minor:3};
+            let ded = 0;
+            issues.forEach(i => { ded += dedMap[i.sev]||3; });
+            const critCount = issues.filter(i => i.sev==="critical").length;
+            const serCount = issues.filter(i => i.sev==="serious").length;
+            let rawScore = 100 - ded;
+            if (critCount>=3) rawScore = Math.min(rawScore,25);
+            else if (critCount>=1) rawScore = Math.min(rawScore,55);
+            else if (serCount>=3) rawScore = Math.min(rawScore,65);
+            const localScore = Math.max(0, Math.min(100, rawScore));
+
+            headlessData = {
+              url: url.trim(),
+              scannedAt: new Date().toISOString(),
+              scanType: "local",
+              issues,
+              passes,
+              score: localScore,
+              images: { total: allImgs.length, missing: miss.map((img, j) => ({
+                index: j+1,
+                src: img.getAttribute("src")||"",
+                missingAlt: !img.hasAttribute("alt"),
+                snippet: img.outerHTML.slice(0,250),
+              })) }
+            };
           }
           setProgressPct(35);
         }
