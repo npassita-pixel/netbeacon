@@ -96,7 +96,7 @@ function runLocalScan(doc) {
       if (!img.hasAttribute("alt")) miss.push(img);
       else if (img.getAttribute("alt").trim() === "") decorative.push(img);
     });
-    if (miss.length) { ded += miss.length <= 2 ? 6 : miss.length <= 5 ? 12 : 20; push("critical", `Images missing alt text (${miss.length})`, "1.1.1", "Images with no alt attribute are invisible to screen readers.", 'Add alt="description". Use alt="" only for truly decorative images.', miss[0]); }
+    if (miss.length) { ded += miss.length <= 2 ? 4 : miss.length <= 5 ? 7 : 10; push("critical", `Images missing alt text (${miss.length})`, "1.1.1", "Images with no alt attribute are invisible to screen readers.", 'Add alt="description". Use alt="" only for truly decorative images.', miss[0]); }
     else pass("All images have alt text", "1.1.1");
     if (decorative.length) push("minor", `${decorative.length} image(s) with empty alt — verify decorative`, "1.1.1", "Images with alt=\"\" are treated as decorative. Confirm these add no meaning.", "If image conveys information, add a descriptive alt attribute.", decorative[0]);
   } catch(e) {}
@@ -105,15 +105,15 @@ function runLocalScan(doc) {
   try {
     const heads = Array.from(doc.querySelectorAll("h1,h2,h3,h4,h5,h6"));
     const h1s = heads.filter(h => h.tagName === "H1");
-    if (!h1s.length) { ded += 5; push("serious", "No H1 heading found", "1.3.1", "Every page should have exactly one H1 describing its main topic.", "Add a single H1 heading to the page.", null); }
-    else if (h1s.length > 1) { ded += 3; push("moderate", `Multiple H1 headings (${h1s.length})`, "1.3.1", "Multiple H1s confuse screen reader users about page structure.", "Consolidate to a single H1.", h1s[1]); }
+    if (!h1s.length) { ded += 4; push("serious", "No H1 heading found", "1.3.1", "Every page should have exactly one H1 describing its main topic.", "Add a single H1 heading to the page.", null); }
+    else if (h1s.length > 1) { ded += 2; push("moderate", `Multiple H1 headings (${h1s.length})`, "1.3.1", "Multiple H1s confuse screen reader users about page structure.", "Consolidate to a single H1.", h1s[1]); }
     else pass("Single H1 heading present", "1.3.1");
     const skipped = [];
     for (let i = 1; i < heads.length; i++) {
       const prev = parseInt(heads[i-1].tagName[1]), cur = parseInt(heads[i].tagName[1]);
       if (cur - prev > 1) skipped.push(heads[i]);
     }
-    if (skipped.length) { ded += 4; push("moderate", `Heading levels skipped (${skipped.length})`, "1.3.1", "Jumping e.g. H2→H4 breaks document outline for screen readers.", "Use heading levels in order, never skip.", skipped[0]); }
+    if (skipped.length) { ded += 3; push("moderate", `Heading levels skipped (${skipped.length})`, "1.3.1", "Jumping e.g. H2→H4 breaks document outline for screen readers.", "Use heading levels in order, never skip.", skipped[0]); }
     else if (heads.length > 1) pass("Heading levels are in order", "1.3.1");
   } catch(e) {}
 
@@ -125,13 +125,12 @@ function runLocalScan(doc) {
       const hasLbl = id && doc.querySelector(`label[for="${id}"]`);
       const ariaLabel = inp.getAttribute("aria-label");
       const ariaLabelledBy = inp.getAttribute("aria-labelledby");
-      // Verify aria-labelledby actually points to an existing element
       const hasValidLabelledBy = ariaLabelledBy &&
         ariaLabelledBy.trim().split(/\s+/).some(refId => doc.getElementById(refId));
       const wrapped = inp.closest("label");
       return !hasLbl && !ariaLabel && !hasValidLabelledBy && !wrapped;
     });
-    if (unlabeled.length) { ded += unlabeled.length <= 2 ? 10 : 15; push("critical", `Form inputs without labels (${unlabeled.length})`, "1.3.1", "Placeholder text disappears on input and is not a substitute for a label.", "Add <label> or aria-label to each input.", unlabeled[0]); }
+    if (unlabeled.length) { ded += unlabeled.length <= 2 ? 6 : 10; push("critical", `Form inputs without labels (${unlabeled.length})`, "1.3.1", "Placeholder text disappears on input and is not a substitute for a label.", "Add <label> or aria-label to each input.", unlabeled[0]); }
     else if (inputs.length) pass("All form inputs are labeled", "1.3.1");
   } catch(e) {}
 
@@ -142,13 +141,11 @@ function runLocalScan(doc) {
       return a.includes("name") || a.includes("email") || a.includes("phone");
     });
     const na = pf.filter(i => !i.getAttribute("autocomplete"));
-    if (na.length) { ded += 4; push("minor", `Personal fields missing autocomplete (${na.length})`, "1.3.5", "Name and email fields need autocomplete for assistive tech users.", "Add autocomplete=name or autocomplete=email.", na[0]); }
+    if (na.length) { ded += 2; push("minor", `Personal fields missing autocomplete (${na.length})`, "1.3.5", "Name and email fields need autocomplete for assistive tech users.", "Add autocomplete=name or autocomplete=email.", na[0]); }
     else if (pf.length) pass("Personal fields have autocomplete", "1.3.5");
   } catch(e) {}
 
   // 1.4.1 Color contrast — requires live layout (getComputedStyle)
-  // DOMParser documents return default styles, not actual page styles.
-  // Only run this check on the live document or skip with a note.
   if (typeof window !== "undefined" && doc === window.document) {
     try {
       const textEls = Array.from(doc.querySelectorAll("p,h1,h2,h3,h4,h5,h6,a,button,label")).filter(el => !isHidden(el)).slice(0,120);
@@ -162,7 +159,6 @@ function runLocalScan(doc) {
         return m ? [+m[1],+m[2],+m[3]] : null;
       }
       function effectiveBg(el) {
-        // Walk up the DOM to find the first non-transparent background
         let node = el;
         while (node && node !== document.body.parentElement) {
           const cs = window.getComputedStyle(node);
@@ -170,7 +166,7 @@ function runLocalScan(doc) {
           if (bg && cs.backgroundColor !== "transparent" && cs.backgroundColor !== "rgba(0, 0, 0, 0)") return bg;
           node = node.parentElement;
         }
-        return [255, 255, 255]; // assume white if nothing found
+        return [255, 255, 255];
       }
       textEls.forEach(el => {
         try {
@@ -185,7 +181,7 @@ function runLocalScan(doc) {
           if (ratio < (large ? 3 : 4.5)) fails.push(el);
         } catch { /* skip element */ }
       });
-      if (fails.length) { ded += fails.length <= 2 ? 5 : fails.length <= 5 ? 10 : 16; push("serious", `Color contrast failures (${fails.length})`, "1.4.3", "Text must have 4.5:1 contrast ratio (3:1 for large/bold text).", "Use a contrast checker to ensure colors meet WCAG AA ratios.", fails[0]); }
+      if (fails.length) { ded += fails.length <= 3 ? 5 : fails.length <= 8 ? 8 : 12; push("serious", `Color contrast failures (${fails.length})`, "1.4.3", "Text must have 4.5:1 contrast ratio (3:1 for large/bold text).", "Use a contrast checker to ensure colors meet WCAG AA ratios.", fails[0]); }
       else if (textEls.length > 0) pass(`Color contrast passes sample check (${textEls.length}/120 elements — gradients not checked)`, "1.4.3");
     } catch(e) { /* contrast check failed gracefully */ }
   } else {
@@ -196,7 +192,7 @@ function runLocalScan(doc) {
   try {
     const meta = doc.querySelector("meta[name=viewport]");
     const content = meta?.getAttribute("content") || "";
-    if (content.includes("user-scalable=no") || content.match(/maximum-scale=1(?!\.)/)) { ded += 7; push("critical", "User zoom disabled by viewport meta", "1.4.4", "Disabling zoom prevents users with low vision from enlarging text.", "Remove user-scalable=no and maximum-scale restrictions.", meta); }
+    if (content.includes("user-scalable=no") || content.match(/maximum-scale=1(?!\.)/)) { ded += 5; push("critical", "User zoom disabled by viewport meta", "1.4.4", "Disabling zoom prevents users with low vision from enlarging text.", "Remove user-scalable=no and maximum-scale restrictions.", meta); }
     else pass("User zoom is not disabled", "1.4.4");
   } catch(e) {}
 
@@ -207,25 +203,22 @@ function runLocalScan(doc) {
       const match = styleStr.match(/(?:^|;)\s*width\s*:\s*(\d+)px/i);
       return match && parseInt(match[1]) > 400;
     }).slice(0,5);
-    // Also flag viewport meta that sets a fixed width
     const viewportMeta = doc.querySelector("meta[name=viewport]");
     const hasFixedViewport = viewportMeta && /width=\d{3,}/.test(viewportMeta.getAttribute("content") || "");
     if (fixedW.length || hasFixedViewport) {
-      ded += 4;
-      push("minor", `Potential horizontal scroll risk (${fixedW.length} fixed-width element${fixedW.length !== 1 ? "s" : ""}${hasFixedViewport ? " + fixed viewport" : ""})`, "1.4.10", "Fixed pixel widths can cause horizontal scrolling at small viewports or high zoom. Note: CSS class-based widths require a live scan to detect.", "Replace fixed px widths with max-width, %, or vw units.", fixedW[0] || null);
+      push("minor", `Potential horizontal scroll risk (${fixedW.length} fixed-width element${fixedW.length !== 1 ? "s" : ""}${hasFixedViewport ? " + fixed viewport" : ""})`, "1.4.10", "Fixed pixel widths can cause horizontal scrolling at small viewports or high zoom.", "Replace fixed px widths with max-width, %, or vw units.", fixedW[0] || null);
     } else pass("No inline fixed-width elements detected (CSS classes require live scan)", "1.4.10");
   } catch(e) {}
 
   // 2.1.1 Positive tabindex
   try {
     const pos = Array.from(doc.querySelectorAll("[tabindex]")).filter(el => parseInt(el.getAttribute("tabindex")) > 0);
-    if (pos.length) { ded += 4; push("moderate", `Positive tabindex values (${pos.length})`, "2.1.1", "Positive tabindex values disrupt natural keyboard navigation order.", "Use tabindex=0 or -1 only. Let DOM order determine tab sequence.", pos[0]); }
+    if (pos.length) { ded += 3; push("moderate", `Positive tabindex values (${pos.length})`, "2.1.1", "Positive tabindex values disrupt natural keyboard navigation order.", "Use tabindex=0 or -1 only. Let DOM order determine tab sequence.", pos[0]); }
     else pass("No positive tabindex values", "2.1.1");
   } catch(e) {}
 
   // 2.4.1 Skip nav
   try {
-    // Broad skip nav detection — covers various common patterns
     const skipSelectors = [
       "a[href='#main-content']", "a[href='#main']", "a[href='#content']",
       "a[href='#skip']", "a[href='#skip-nav']", "a[href='#maincontent']",
@@ -234,21 +227,21 @@ function runLocalScan(doc) {
       "a[class*='skip']", "a[id*='skip']"
     ];
     const skip = skipSelectors.some(sel => { try { return doc.querySelector(sel); } catch { return false; } });
-    if (!skip) { ded += 5; push("moderate", "No skip navigation link detected", "2.4.1", "Keyboard users must tab through all nav items on every page without a skip link.", "Add <a href='#main-content' class='skip-link'>Skip to main content</a> as first focusable element.", null); }
+    if (!skip) { ded += 3; push("moderate", "No skip navigation link detected", "2.4.1", "Keyboard users must tab through all nav items on every page without a skip link.", "Add <a href='#main-content' class='skip-link'>Skip to main content</a> as first focusable element.", null); }
     else pass("Skip navigation link present", "2.4.1");
   } catch(e) {}
 
   // 2.4.2 Page title
   try {
     const t = doc.querySelector("title");
-    if (!t || t.textContent.trim().length < 3) { ded += 5; push("serious", "Page missing descriptive title", "2.4.2", "Screen readers announce the page title first — it must be descriptive.", "Add a unique, descriptive <title> to the <head>.", null); }
+    if (!t || t.textContent.trim().length < 3) { ded += 4; push("serious", "Page missing descriptive title", "2.4.2", "Screen readers announce the page title first — it must be descriptive.", "Add a unique, descriptive <title> to the <head>.", null); }
     else pass("Page has a descriptive title", "2.4.2");
   } catch(e) {}
 
   // 2.4.3 Tabindex=-1 on interactive
   try {
     const trapped = Array.from(doc.querySelectorAll("a[href][tabindex='-1'],button[tabindex='-1']")).filter(el => !hasAriaHiddenAncestor(el));
-    if (trapped.length) { ded += 5; push("moderate", `Interactive elements removed from tab order (${trapped.length})`, "2.4.3", "tabindex=-1 makes interactive elements unreachable by keyboard.", "Remove tabindex=-1 unless element also has aria-hidden=true.", trapped[0]); }
+    if (trapped.length) { ded += 3; push("moderate", `Interactive elements removed from tab order (${trapped.length})`, "2.4.3", "tabindex=-1 makes interactive elements unreachable by keyboard.", "Remove tabindex=-1 unless element also has aria-hidden=true.", trapped[0]); }
   } catch(e) {}
 
   // 2.4.4 Vague links
@@ -262,14 +255,12 @@ function runLocalScan(doc) {
       if (!txt && !aria && !hasImg) empty.push(a);
       else if (!aria && vague.includes(txt)) vagueFound.push(a);
     });
-    if (empty.length) { ded += empty.length <= 2 ? 5 : 8; push("serious", `Empty links with no accessible name (${empty.length})`, "2.4.4", "Links with no text are meaningless to screen reader users.", "Add descriptive text, aria-label, or an img with alt inside the link.", empty[0]); }
-    if (vagueFound.length) { ded += vagueFound.length <= 3 ? 4 : 7; push("moderate", `Links with vague text (${vagueFound.length})`, "2.4.4", '"Click here" and "Read more" are meaningless out of context.', "Use descriptive link text that makes sense alone.", vagueFound[0]); }
+    if (empty.length) { ded += empty.length <= 2 ? 3 : 5; push("serious", `Empty links with no accessible name (${empty.length})`, "2.4.4", "Links with no text are meaningless to screen reader users.", "Add descriptive text, aria-label, or an img with alt inside the link.", empty[0]); }
+    if (vagueFound.length) { ded += vagueFound.length <= 3 ? 3 : 5; push("moderate", `Links with vague text (${vagueFound.length})`, "2.4.4", '"Click here" and "Read more" are meaningless out of context.', "Use descriptive link text that makes sense alone.", vagueFound[0]); }
     if (!empty.length && !vagueFound.length) pass("Links have descriptive text", "2.4.4");
   } catch(e) {}
 
-  // 2.4.11 Focus visibility — requires live layout engine (headless only)
-  // DOMParser has no computed styles so window.getComputedStyle returns defaults;
-  // skip this check in paste/proxy mode to avoid false positives.
+  // 2.4.11 Focus visibility — requires live layout engine
   if (typeof window !== "undefined" && doc === window.document) {
     try {
       const focusEls = Array.from(doc.querySelectorAll("a,button,[tabindex='0']")).slice(0,30);
@@ -280,16 +271,30 @@ function runLocalScan(doc) {
           const os = cs.outlineStyle;
           const shadow = cs.boxShadow;
           return (ow === 0 || os === "none") && (!shadow || shadow === "none");
-        } catch { return false; } // don't swallow silently — log in dev
+        } catch { return false; }
       });
-      if (hidden.length >= 3) { ded += 7; push("serious", `Focus indicator hidden (${hidden.length} elements)`, "2.4.11", "outline:none without a replacement makes keyboard navigation invisible.", "Add :focus { outline: 2px solid #1A56DB; outline-offset: 2px } to your CSS.", hidden[0]); }
+      if (hidden.length >= 3) { ded += 5; push("serious", `Focus indicator hidden (${hidden.length} elements)`, "2.4.11", "outline:none without a replacement makes keyboard navigation invisible.", "Add :focus { outline: 2px solid #1A56DB; outline-offset: 2px } to your CSS.", hidden[0]); }
       else pass("Focus indicators appear visible", "2.4.11");
     } catch(e) { /* layout check failed gracefully */ }
   } else {
     pass("Focus visibility (check requires live page — use headless scan)", "2.4.11");
   }
 
-  // 2.5.8 Touch targets — requires live layout engine (getBoundingClientRect)
+  // 2.5.3 Accessible name vs visible text mismatch
+  try {
+    const mismatchEls = Array.from(doc.querySelectorAll("[aria-label]")).filter(el => {
+      if (hasAriaHiddenAncestor(el) || isHidden(el)) return false;
+      const label = (el.getAttribute("aria-label") || "").toLowerCase().trim();
+      const text = (el.textContent || "").toLowerCase().trim();
+      if (text.length < 2 || label.length < 2) return false;
+      // The visible text must be included in the accessible name
+      return !label.includes(text.slice(0, Math.min(text.length, 12))) && !text.includes(label.slice(0, Math.min(label.length, 12)));
+    });
+    if (mismatchEls.length) { ded += mismatchEls.length <= 3 ? 4 : 6; push("serious", `Accessible name does not match visible text (${mismatchEls.length})`, "2.5.3", "When aria-label differs from visible text, speech-input users cannot activate controls by speaking what they see.", "Ensure aria-label starts with or includes the visible text content.", mismatchEls[0]); }
+    else pass("Accessible names match visible text", "2.5.3");
+  } catch(e) {}
+
+  // 2.5.8 Touch targets — requires live layout engine
   if (typeof window !== "undefined" && doc === window.document) {
     try {
       const small = Array.from(doc.querySelectorAll("a,button,[role=button]")).filter(el => {
@@ -297,7 +302,7 @@ function runLocalScan(doc) {
         const r = el.getBoundingClientRect();
         return r.width > 0 && r.height > 0 && (r.width < 24 || r.height < 24);
       });
-      if (small.length) { ded += small.length <= 3 ? 4 : 7; push("moderate", `Touch targets too small (${small.length})`, "2.5.8", "Interactive elements must be at least 24×24px per WCAG 2.2.", "Increase size to 24×24px minimum using padding.", small[0]); }
+      if (small.length) { ded += small.length <= 3 ? 3 : 5; push("moderate", `Touch targets too small (${small.length})`, "2.5.8", "Interactive elements must be at least 24×24px per WCAG 2.2.", "Increase size to 24×24px minimum using padding.", small[0]); }
       else pass("Touch targets meet 24×24px minimum", "2.5.8");
     } catch(e) { /* layout check failed gracefully */ }
   } else {
@@ -307,7 +312,7 @@ function runLocalScan(doc) {
   // 3.1.1 Lang attribute
   try {
     const lang = doc.documentElement?.getAttribute("lang");
-    if (!lang || lang.trim().length < 2) { ded += 8; push("serious", "Missing lang attribute on html element", "3.1.1", "Screen readers need the lang attribute to use the correct voice profile.", "Add lang='en' (or appropriate language code) to <html>.", null); }
+    if (!lang || lang.trim().length < 2) { ded += 5; push("serious", "Missing lang attribute on html element", "3.1.1", "Screen readers need the lang attribute to use the correct voice profile.", "Add lang='en' (or appropriate language code) to <html>.", null); }
     else {
       const valid = ["en","en-US","en-GB","es","es-ES","fr","de","zh","ja","ko","pt","it","ru","ar","nl","pl","sv","da","fi","nb","tr","he","hi","th","vi","id","ms","ro","cs","hu","uk","el"];
       const isValid = valid.some(v => lang.toLowerCase().startsWith(v.toLowerCase()));
@@ -319,7 +324,7 @@ function runLocalScan(doc) {
   // 3.3.2 Error descriptions
   try {
     const req = Array.from(doc.querySelectorAll("input[required],input[aria-required=true]")).filter(i => !i.getAttribute("aria-describedby"));
-    if (req.length) { ded += req.length <= 2 ? 4 : 6; push("moderate", `Required fields missing error descriptions (${req.length})`, "3.3.2", "Required inputs need aria-describedby pointing to error messages.", "Add aria-describedby to each required field.", req[0]); }
+    if (req.length) { ded += req.length <= 2 ? 3 : 4; push("moderate", `Required fields missing error descriptions (${req.length})`, "3.3.2", "Required inputs need aria-describedby pointing to error messages.", "Add aria-describedby to each required field.", req[0]); }
     else pass("Required fields have error descriptions", "3.3.2");
   } catch(e) {}
 
@@ -329,7 +334,7 @@ function runLocalScan(doc) {
     const counts = {};
     ids.forEach(id => counts[id] = (counts[id] || 0) + 1);
     const dups = Object.keys(counts).filter(id => counts[id] > 1);
-    if (dups.length) { ded += dups.length <= 2 ? 5 : 8; push("serious", `Duplicate IDs (${dups.length})`, "4.1.1", "Duplicate IDs break label/input associations and ARIA references.", `Make all id attributes unique. Found: ${dups.slice(0,3).join(", ")}`, null); }
+    if (dups.length) { ded += dups.length <= 2 ? 3 : 5; push("serious", `Duplicate IDs (${dups.length})`, "4.1.1", "Duplicate IDs break label/input associations and ARIA references.", `Make all id attributes unique. Found: ${dups.slice(0,3).join(", ")}`, null); }
     else pass("No duplicate IDs", "4.1.1");
   } catch(e) {}
 
@@ -342,7 +347,7 @@ function runLocalScan(doc) {
       const title = b.getAttribute("title");
       return !txt && !aria && !title;
     });
-    if (btns.length) { ded += btns.length <= 2 ? 8 : 12; push("critical", `Buttons missing accessible names (${btns.length})`, "4.1.2", "Icon-only buttons need aria-label for screen readers.", "Add aria-label='Action description' to each icon button.", btns[0]); }
+    if (btns.length) { ded += btns.length <= 2 ? 5 : 8; push("critical", `Buttons missing accessible names (${btns.length})`, "4.1.2", "Icon-only buttons need aria-label for screen readers.", "Add aria-label='Action description' to each icon button.", btns[0]); }
     else pass("All buttons have accessible names", "4.1.2");
   } catch(e) {}
 
@@ -355,7 +360,7 @@ function runLocalScan(doc) {
   // 4.1.2 ARIA required props
   try {
     const ariaFails = Array.from(doc.querySelectorAll("[role='switch'],[role='checkbox'],[role='radio']")).filter(el => !el.hasAttribute("aria-checked")).slice(0,5);
-    if (ariaFails.length) { ded += 6; push("serious", `ARIA widgets missing required properties (${ariaFails.length})`, "4.1.2", "Custom ARIA widgets need required state properties like aria-checked.", "Add aria-checked to switches, checkboxes, and radio roles.", ariaFails[0]); }
+    if (ariaFails.length) { ded += 5; push("serious", `ARIA widgets missing required properties (${ariaFails.length})`, "4.1.2", "Custom ARIA widgets need required state properties like aria-checked.", "Add aria-checked to switches, checkboxes, and radio roles.", ariaFails[0]); }
   } catch(e) {}
 
   // 4.1.2 SVG accessible names
@@ -367,13 +372,13 @@ function runLocalScan(doc) {
       if (role === "presentation" || role === "none") return false;
       return !svg.getAttribute("aria-label") && !svg.getAttribute("aria-labelledby") && !svg.querySelector("title");
     }).slice(0,10);
-    if (svgs.length > 3) { ded += 5; push("moderate", `SVG icons missing accessible names (${svgs.length})`, "4.1.2", "SVG icons without labels are invisible to screen readers.", "Add aria-label to informational SVGs, or aria-hidden='true' if decorative.", svgs[0]); }
+    if (svgs.length > 3) { ded += 4; push("moderate", `SVG icons missing accessible names (${svgs.length})`, "4.1.2", "SVG icons without labels are invisible to screen readers.", "Add aria-label to informational SVGs, or aria-hidden='true' if decorative.", svgs[0]); }
   } catch(e) {}
 
   // 4.1.2 Iframes
   try {
     const frames = Array.from(doc.querySelectorAll("iframe")).filter(f => !f.getAttribute("title"));
-    if (frames.length) { ded += 5; push("serious", `iFrames missing titles (${frames.length})`, "4.1.2", "Screen readers cannot describe the purpose of untitled iframes.", "Add title='Description of content' to each iframe.", frames[0]); }
+    if (frames.length) { ded += 4; push("serious", `iFrames missing titles (${frames.length})`, "4.1.2", "Screen readers cannot describe the purpose of untitled iframes.", "Add title='Description of content' to each iframe.", frames[0]); }
     else pass("All iframes have titles", "4.1.2");
   } catch(e) {}
 
@@ -381,7 +386,7 @@ function runLocalScan(doc) {
   try {
     const hasMain = doc.querySelector("main,[role=main]");
     const hasNav = doc.querySelector("nav,[role=navigation]");
-    if (!hasMain) { ded += 4; push("moderate", "No <main> landmark", "1.3.6", "Page structure is unclear without landmark regions.", "Add <main> around primary content.", null); }
+    if (!hasMain) { ded += 2; push("moderate", "No <main> landmark", "1.3.6", "Page structure is unclear without landmark regions.", "Add <main> around primary content.", null); }
     else pass("Page landmarks present", "1.3.6");
     if (!hasNav && doc.querySelectorAll("a").length > 3) { push("minor", "No <nav> landmark", "1.3.6", "Navigation links should be wrapped in a <nav> element.", "Wrap your navigation links in <nav>.", null); }
   } catch(e) {}
