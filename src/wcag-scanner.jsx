@@ -45,7 +45,8 @@ function runLocalScan(doc) {
       "1":  "Perceivable", "2": "Operable", "3": "Understandable", "4": "Robust"
     };
     const principle = principleMap[wcag?.split(".")[0]] || "Robust";
-    issues.push({ severity: sev, title, wcag, principle, description: desc, fix, element: el?.outerHTML?.slice(0,200) || null });
+    const imgSrc = (el?.tagName === "IMG") ? (el.src || el.getAttribute("src") || "") : "";
+    issues.push({ severity: sev, title, wcag, principle, description: desc, fix, element: el?.outerHTML?.slice(0,200) || null, imgSrc });
   }
   function pass(t, w) { passes.push({ title: t, wcag: w }); }
 
@@ -537,7 +538,14 @@ function IssueRow({ issue }) {
       {open && (
         <div style={{ padding:"0 17px 17px", borderTop:`1px solid ${C.border}`, background:"#FAFBFD" }}>
           <p style={{ color:C.textSub, fontSize:13, margin:"13px 0 10px", lineHeight:1.7 }}>{issue.description}</p>
-          {issue.element && (
+          {issue.imgSrc ? (
+            <div style={{ display:"flex", gap:10, alignItems:"flex-start", margin:"9px 0" }}>
+              <img src={issue.imgSrc} alt="" style={{ width:60, height:60, borderRadius:8, objectFit:"cover", background:C.bg, border:`1px solid ${C.border}`, flexShrink:0 }} onError={e=>{e.target.style.display="none"}}/>
+              <div style={{ flex:1, minWidth:0 }}>
+                {issue.element && <pre style={{ background:"#0D1421", color:"#7DD3FC", padding:"11px 15px", borderRadius:8, fontSize:11, overflowX:"auto", margin:0, fontFamily:"'JetBrains Mono','Fira Code',monospace", whiteSpace:"pre-wrap", wordBreak:"break-all", lineHeight:1.6 }}>{issue.element}</pre>}
+              </div>
+            </div>
+          ) : issue.element && (
             <pre style={{ background:"#0D1421", color:"#7DD3FC", padding:"11px 15px", borderRadius:8, fontSize:11, overflowX:"auto", margin:"9px 0", fontFamily:"'JetBrains Mono','Fira Code',monospace", whiteSpace:"pre-wrap", wordBreak:"break-all", lineHeight:1.6 }}>{issue.element}</pre>
           )}
           <div style={{ background:C.greenLight, border:`1px solid #6EE7B7`, borderRadius:8, padding:"9px 13px", marginTop:9, display:"flex", gap:7, alignItems:"flex-start" }}>
@@ -582,9 +590,10 @@ body{font-family:'DM Sans',sans-serif;background:#fff;color:#0D1421;font-size:14
 .brand{font-size:21px;font-weight:800;color:#1A56DB;letter-spacing:-.3px}
 .meta{text-align:right;color:#4A5568;font-size:12px;line-height:2}
 .score-row{display:flex;gap:28px;align-items:center;background:#F8F9FC;border-radius:14px;padding:24px 28px;margin-bottom:24px;border:1px solid #E2E6EF}
-.score-circle{width:88px;height:88px;border-radius:50%;border:7px solid ${scoreColor};display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0}
-.score-num{font-size:26px;font-weight:800;color:${scoreColor}}
-.score-grade{font-size:10px;color:#8A95A8;margin-top:1px}
+.score-circle{flex-shrink:0}
+.score-grade-text{font-size:12px;font-weight:800;color:${scoreColor};text-align:center;margin-top:4px}
+.img-preview{width:60px;height:60px;border-radius:8px;object-fit:cover;background:#F8F9FC;border:1px solid #E2E6EF;flex-shrink:0}
+.img-row{display:flex;gap:10px;align-items:center;margin-top:6px}
 .badges{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
 .badge{display:inline-block;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:600}
 .stats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px}
@@ -631,9 +640,9 @@ ${(stats.critical > 0 || stats.serious > 0) ? `
 </div>
 
 <div class="score-row">
-  <div class="score-circle">
-    <div class="score-num">${score}</div>
-    <div class="score-grade">Grade ${grade}</div>
+  <div>
+    <div class="score-circle"><svg width="88" height="88" viewBox="0 0 88 88"><circle cx="44" cy="44" r="38" stroke="#E2E6EF" stroke-width="7" fill="none"/><circle cx="44" cy="44" r="38" stroke="${scoreColor}" stroke-width="7" fill="none" stroke-linecap="round" stroke-dasharray="${Math.round(239*(score/100))} 239" transform="rotate(-90 44 44)"/><text x="44" y="40" text-anchor="middle" fill="${scoreColor}" font-size="24" font-weight="800" font-family="DM Sans,sans-serif">${score}</text><text x="44" y="55" text-anchor="middle" fill="#8A95A8" font-size="9" font-family="DM Sans,sans-serif">/ 100</text></svg></div>
+    <div class="score-grade-text">Grade ${grade}</div>
   </div>
   <div style="flex:1">
     <div style="font-size:19px;font-weight:800;color:${scoreColor};margin-bottom:5px">${score >= 90?"Excellent":score >= 80?"Good":score >= 70?"Needs Improvement":score >= 60?"Needs Work":"Critical"}</div>
@@ -659,12 +668,12 @@ ${issues.map(issue => `
     <span class="ititle">${esc(issue.title)}</span>
   </div>
   <div class="idesc">${esc(issue.description)}</div>
-  ${issue.element ? `<div style="font-family:monospace;font-size:10px;background:#F8F9FC;padding:7px 10px;border-radius:5px;margin:5px 0;overflow:hidden;word-break:break-all;color:#4A5568">${esc(issue.element)}</div>` : ""}
+  ${issue.imgSrc ? `<div class="img-row"><img class="img-preview" src="${esc(issue.imgSrc)}" alt="" onerror="this.style.display='none'"><div style="flex:1;min-width:0">${issue.element ? `<div style="font-family:monospace;font-size:10px;background:#F8F9FC;padding:7px 10px;border-radius:5px;overflow:hidden;word-break:break-all;color:#4A5568">${esc(issue.element)}</div>` : ""}</div></div>` : issue.element ? `<div style="font-family:monospace;font-size:10px;background:#F8F9FC;padding:7px 10px;border-radius:5px;margin:5px 0;overflow:hidden;word-break:break-all;color:#4A5568">${esc(issue.element)}</div>` : ""}
   <div class="ifix"><strong>Fix:</strong> ${esc(issue.fix)}</div>
 </div>`).join("")}` : ""}
 
 ${altImages.length > 0 ? `<div class="sec">🖼 Missing Alt Text (${altImages.length})</div>
-${altImages.slice(0,20).map(img => `<div class="issue"><span class="chip" style="${img.missingAlt?sevCSS.critical:sevCSS.serious}">${img.missingAlt?"No alt attribute":"Empty alt"}</span> <span style="font-family:monospace;font-size:11px;color:#4A5568;word-break:break-all;margin-left:8px">${esc(img.srcRaw||"(no src)")}</span></div>`).join("")}
+${altImages.slice(0,20).map(img => `<div class="issue"><div class="issue-head"><span class="chip" style="${img.missingAlt?sevCSS.critical:sevCSS.serious}">${img.missingAlt?"No alt attribute":"Empty alt"}</span><span style="font-family:monospace;font-size:11px;color:#4A5568;word-break:break-all;margin-left:8px">${esc(img.srcRaw||"(no src)")}</span></div>${img.src ? `<div class="img-row"><img class="img-preview" src="${esc(img.src)}" alt="" onerror="this.style.display='none'"><span style="font-size:11px;color:#8A95A8">Preview</span></div>` : ""}</div>`).join("")}
 ${altImages.length > 20 ? `<p style="font-size:12px;color:#8A95A8;margin-top:8px">… and ${altImages.length-20} more.</p>` : ""}` : ""}
 
 ${passes.length > 0 ? `<div class="sec">✅ Checks Passed (${passes.length})</div>

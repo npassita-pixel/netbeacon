@@ -214,9 +214,9 @@ var css='@import url(\\'https://fonts.googleapis.com/css2?family=Outfit:wght@400
 +'#bp-body::-webkit-scrollbar{width:4px}'
 +'#bp-body::-webkit-scrollbar-thumb{background:#e2e8f0;border-radius:99px}'
 +'#bp-score-hero{padding:24px 20px 16px;text-align:center;border-bottom:1px solid #f1f5f9}'
-+'.bp-ring-wrap{display:inline-block;position:relative;margin-bottom:8px}'
-+'.bp-grade{position:absolute;bottom:4px;right:4px;width:28px;height:28px;border-radius:50%;color:#fff;font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center}'
-+'#bp-score-label{font-size:20px;font-weight:800;margin-bottom:4px}'
++'.bp-ring-wrap{display:inline-block;position:relative;margin-bottom:4px}'
++'.bp-grade-label{font-size:13px;font-weight:800;margin-top:2px;margin-bottom:4px;letter-spacing:.5px}'
++'#bp-score-label{display:none}'
 +'#bp-score-url{font-size:11px;color:#94a3b8;margin-bottom:12px;word-break:break-all}'
 +'#bp-score-bar-wrap{background:#f1f5f9;border-radius:99px;height:8px;overflow:hidden;margin:0 20px 6px}'
 +'#bp-score-bar{height:100%;border-radius:99px;transition:width 1.4s cubic-bezier(.4,0,.2,1)}'
@@ -240,10 +240,13 @@ var css='@import url(\\'https://fonts.googleapis.com/css2?family=Outfit:wght@400
 +'.bp-issue-body.open{display:block}'
 +'.bp-desc{font-size:12px;color:#475569;line-height:1.7;margin:10px 0 8px}'
 +'.bp-code{background:#0f1623;color:#7dd3fc;padding:9px 12px;border-radius:7px;font-size:10px;font-family:monospace;overflow-x:auto;margin-bottom:8px;white-space:pre-wrap;word-break:break-all}'
++'.bp-img-preview{width:60px;height:60px;border-radius:8px;object-fit:cover;background:#f1f5f9;border:1px solid #e2e8f0;flex-shrink:0}'
++'.bp-img-preview-wrap{display:flex;gap:10px;align-items:flex-start;margin:8px 0}'
++'.bp-img-fallback{width:60px;height:60px;border-radius:8px;background:#f1f5f9;border:1px solid #e2e8f0;display:flex;align-items:center;justify-content:center;font-size:20px;color:#94a3b8;flex-shrink:0}'
 +'.bp-fix{background:#dcfce7;border:1px solid #86efac;border-radius:7px;padding:8px 11px;font-size:11px;color:#166534;line-height:1.6}'
 +'.bp-pass{display:flex;align-items:center;gap:8px;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;margin:0 12px 6px;font-size:12px;color:#166534;font-weight:500}'
 +'.bp-img-card{border:1px solid #f1f5f9;border-radius:10px;margin:0 12px 7px;padding:10px 12px;display:flex;gap:10px;align-items:center}'
-+'.bp-img-thumb{width:48px;height:36px;border-radius:6px;object-fit:cover;background:#f1f5f9;flex-shrink:0}'
++'.bp-img-thumb{width:60px;height:60px;border-radius:8px;object-fit:cover;background:#f1f5f9;border:1px solid #e2e8f0;flex-shrink:0}'
 +'.bp-img-src{font-size:10px;color:#94a3b8;word-break:break-all;margin-top:2px}'
 +'#bp-actions{display:none;padding:10px 14px;background:#f8fafc;border-bottom:1px solid #f1f5f9;gap:8px;flex-shrink:0}'
 +'#bp-actions.visible{display:flex}'
@@ -264,8 +267,10 @@ function runScan(){
   var ded=0;
   function push(sev,title,wcag,desc,fix,el){
     var snippet='';
+    var imgSrc='';
     if(el){try{snippet=el.outerHTML?el.outerHTML.slice(0,120):'';}catch(e){}}
-    issues.push({sev:sev,title:title,wcag:wcag,desc:desc,fix:fix,el:snippet});
+    if(el&&el.tagName==='IMG'){try{imgSrc=el.src||'';}catch(e){}}
+    issues.push({sev:sev,title:title,wcag:wcag,desc:desc,fix:fix,el:snippet,imgSrc:imgSrc});
   }
   function pass(t,w){passes.push({t:t,w:w});}
 
@@ -542,8 +547,8 @@ function runScan(){
   document.getElementById('bp-scanning').style.display='none';
   var bod=document.getElementById('bp-body');bod.style.display='block';
   var h='<div id="bp-score-hero">';
-  h+='<div class="bp-ring-wrap"><svg width="100" height="100" viewBox="0 0 100 100"><circle cx="50" cy="50" r="43" stroke="#f1f5f9" stroke-width="8" fill="none"/><circle cx="50" cy="50" r="43" stroke="'+color+'" stroke-width="8" fill="none" stroke-linecap="round" stroke-dasharray="'+Math.round(270*(score/100))+' 270" transform="rotate(-90 50 50)" style="transition:stroke-dasharray 1.2s"/></svg><div class="bp-grade" style="background:'+color+'">'+grade+'</div></div>';
-  h+='<div id="bp-score-label" style="color:'+color+'">'+score+' / 100</div>';
+  h+='<div class="bp-ring-wrap"><svg width="100" height="100" viewBox="0 0 100 100"><circle cx="50" cy="50" r="43" stroke="#f1f5f9" stroke-width="8" fill="none"/><circle cx="50" cy="50" r="43" stroke="'+color+'" stroke-width="8" fill="none" stroke-linecap="round" stroke-dasharray="'+Math.round(270*(score/100))+' 270" transform="rotate(-90 50 50)" style="transition:stroke-dasharray 1.2s"/><text x="50" y="46" text-anchor="middle" fill="'+color+'" font-size="26" font-weight="800" font-family="Outfit,sans-serif">'+score+'</text><text x="50" y="62" text-anchor="middle" fill="#94a3b8" font-size="10" font-family="Outfit,sans-serif">/ 100</text></svg></div>';
+  h+='<div class="bp-grade-label" style="color:'+color+'">Grade '+grade+'</div>';
   h+='<div id="bp-score-url">'+location.hostname+location.pathname.slice(0,40)+'</div>';
   h+='<div id="bp-score-bar-wrap"><div id="bp-score-bar" style="width:0;background:'+color+'"></div></div>';
   h+='<div id="bp-score-pct" style="color:'+color+'">'+score+'%</div>';
@@ -572,7 +577,13 @@ function runScan(){
       h+='<span class="bp-arr">v</span>';
       h+='</button><div class="bp-issue-body">';
       h+='<div class="bp-desc">'+issue.desc+'</div>';
-      if(issue.el)h+='<div class="bp-code">'+issue.el.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>';
+      if(issue.imgSrc){
+        h+='<div class="bp-img-preview-wrap"><img class="bp-img-preview" src="'+issue.imgSrc+'" alt="" onerror="this.outerHTML=\\'<div class=bp-img-fallback>\\u{1F5BC}</div>\\'"><div style="flex:1;min-width:0">';
+        if(issue.el)h+='<div class="bp-code" style="margin-top:0">'+issue.el.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>';
+        h+='</div></div>';
+      } else if(issue.el){
+        h+='<div class="bp-code">'+issue.el.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>';
+      }
       h+='<div class="bp-fix"><b>Fix:</b> '+issue.fix+'</div>';
       h+='</div></div>';
     });
@@ -621,9 +632,8 @@ function openReport(){
   doc+='.brand{font-size:21px;font-weight:800;color:#1A56DB;letter-spacing:-.3px}';
   doc+='.meta{text-align:right;color:#4A5568;font-size:12px;line-height:2}';
   doc+='.score-row{display:flex;gap:28px;align-items:center;background:#F8F9FC;border-radius:14px;padding:24px 28px;margin-bottom:24px;border:1px solid #E2E6EF}';
-  doc+='.score-circle{width:88px;height:88px;border-radius:50%;border:7px solid '+scoreColor+';display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0}';
-  doc+='.score-num{font-size:26px;font-weight:800;color:'+scoreColor+'}';
-  doc+='.score-grade{font-size:10px;color:#8A95A8;margin-top:1px}';
+  doc+='.score-circle{flex-shrink:0}'
+  doc+='.score-grade-text{font-size:12px;font-weight:800;color:'+scoreColor+';text-align:center;margin-top:4px}';
   doc+='.badges{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}';
   doc+='.badge{display:inline-block;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:600}';
   doc+='.stats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px}';
@@ -640,6 +650,8 @@ function openReport(){
   doc+='.ifix{font-size:12px;color:#065F46;background:#D1FAE5;border:1px solid #6EE7B7;border-radius:6px;padding:7px 10px}';
   doc+='.pass{display:flex;gap:8px;align-items:center;padding:8px 12px;background:#D1FAE5;border-radius:7px;margin-bottom:5px;font-size:12px}';
   doc+='.ada-banner{background:#FEF2F2;border:1px solid #FCA5A5;border-radius:10px;padding:13px 16px;margin-bottom:20px}';
+  doc+='.img-preview{width:60px;height:60px;border-radius:8px;object-fit:cover;background:#F8F9FC;border:1px solid #E2E6EF;flex-shrink:0}';
+  doc+='.img-row{display:flex;gap:10px;align-items:center;margin-top:6px}';
   doc+='.footer{margin-top:40px;padding-top:20px;border-top:1px solid #E2E6EF;display:flex;justify-content:space-between;color:#8A95A8;font-size:11px}';
   doc+='@media print{.no-print{display:none!important}.issue{break-inside:avoid}.wrap{padding:28px}@page{margin:12mm;size:A4}}';
   doc+='</style></head><body><div class="wrap">';
@@ -649,7 +661,7 @@ function openReport(){
   }
   doc+='<div class="header"><div><div class="brand">\\u267F Beacon Accessibility Report</div><div style="color:#8A95A8;font-size:12px;margin-top:3px">WCAG 2.1 AA \\u2022 WCAG 2.2 \\u2022 ADA Title III \\u2022 Section 508</div></div>';
   doc+='<div class="meta"><div><strong>URL:</strong> '+safeUrl+'</div><div><strong>Date:</strong> '+date+'</div><div><strong>Standard:</strong> WCAG 2.1 AA + 2.2</div><div><strong>Compliance:</strong> ADA Title III \\u2022 Section 508</div></div></div>';
-  doc+='<div class="score-row"><div class="score-circle"><div class="score-num">'+score+'</div><div class="score-grade">Grade '+grade+'</div></div>';
+  doc+='<div class="score-row"><div><div class="score-circle"><svg width="88" height="88" viewBox="0 0 88 88"><circle cx="44" cy="44" r="38" stroke="#E2E6EF" stroke-width="7" fill="none"/><circle cx="44" cy="44" r="38" stroke="'+scoreColor+'" stroke-width="7" fill="none" stroke-linecap="round" stroke-dasharray="'+Math.round(239*(score/100))+' 239" transform="rotate(-90 44 44)"/><text x="44" y="40" text-anchor="middle" fill="'+scoreColor+'" font-size="24" font-weight="800" font-family="DM Sans,sans-serif">'+score+'</text><text x="44" y="55" text-anchor="middle" fill="#8A95A8" font-size="9" font-family="DM Sans,sans-serif">/ 100</text></svg></div><div class="score-grade-text">Grade '+grade+'</div></div>';
   doc+='<div style="flex:1"><div style="font-size:19px;font-weight:800;color:'+scoreColor+';margin-bottom:5px">'+(score>=90?'Excellent':score>=80?'Good':score>=70?'Needs Improvement':score>=60?'Needs Work':'Critical')+'</div>';
   doc+='<div style="font-size:13px;color:#4A5568;line-height:1.6;margin-bottom:8px">This page scored '+score+'/100 on automated accessibility checks.</div>';
   doc+='<div class="badges"><span class="badge" style="background:#EBF1FF;color:#1A56DB;border:1px solid #BFDBFE">WCAG 2.1/2.2 \\u2022 ADA \\u2022 \\u00A7508</span><span class="badge" style="'+adaStyle+'">\\u2696\\uFE0F ADA Risk: '+adaRisk+'</span></div></div></div>';
@@ -662,14 +674,22 @@ function openReport(){
     issues.forEach(function(issue){
       doc+='<div class="issue"><div class="issue-head"><span class="chip" style="'+(sevCSS[issue.sev]||sevCSS.minor)+'">'+esc(issue.sev)+'</span><span class="wtag">'+esc(issue.wcag)+'</span><span class="ititle">'+esc(issue.title)+'</span></div>';
       doc+='<div class="idesc">'+esc(issue.desc)+'</div>';
-      if(issue.el)doc+='<div style="font-family:monospace;font-size:10px;background:#F8F9FC;padding:7px 10px;border-radius:5px;margin:5px 0;overflow:hidden;word-break:break-all;color:#4A5568">'+esc(issue.el)+'</div>';
+      if(issue.imgSrc){
+        doc+='<div class="img-row"><img class="img-preview" src="'+esc(issue.imgSrc)+'" alt="" onerror="this.style.display=\\u0027none\\u0027"><div style="flex:1;min-width:0">';
+        if(issue.el)doc+='<div style="font-family:monospace;font-size:10px;background:#F8F9FC;padding:7px 10px;border-radius:5px;overflow:hidden;word-break:break-all;color:#4A5568">'+esc(issue.el)+'</div>';
+        doc+='</div></div>';
+      } else if(issue.el){
+        doc+='<div style="font-family:monospace;font-size:10px;background:#F8F9FC;padding:7px 10px;border-radius:5px;margin:5px 0;overflow:hidden;word-break:break-all;color:#4A5568">'+esc(issue.el)+'</div>';
+      }
       doc+='<div class="ifix"><strong>Fix:</strong> '+esc(issue.fix)+'</div></div>';
     });
   }
   if(imgs.length){
     doc+='<div class="sec">\\uD83D\\uDDBC Missing Alt Text ('+imgs.length+')</div>';
     imgs.slice(0,20).forEach(function(img){
-      doc+='<div class="issue"><span class="chip" style="'+(img.missingAlt?sevCSS.critical:sevCSS.serious)+'">'+(img.missingAlt?'No alt attribute':'Empty alt')+'</span> <span style="font-family:monospace;font-size:11px;color:#4A5568;word-break:break-all;margin-left:8px">'+esc(img.srcRaw||'(no src)')+'</span></div>';
+      doc+='<div class="issue"><div class="issue-head"><span class="chip" style="'+(img.missingAlt?sevCSS.critical:sevCSS.serious)+'">'+(img.missingAlt?'No alt attribute':'Empty alt')+'</span><span style="font-family:monospace;font-size:11px;color:#4A5568;word-break:break-all;margin-left:8px">'+esc(img.srcRaw||'(no src)')+'</span></div>';
+      if(img.src)doc+='<div class="img-row"><img class="img-preview" src="'+esc(img.src)+'" alt="" onerror="this.style.display=\\u0027none\\u0027"><span style="font-size:11px;color:#8A95A8">Preview</span></div>';
+      doc+='</div>';
     });
     if(imgs.length>20)doc+='<p style="font-size:12px;color:#8A95A8;margin-top:8px">\\u2026 and '+(imgs.length-20)+' more.</p>';
   }
