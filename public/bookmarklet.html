@@ -244,11 +244,18 @@ var css='@import url(\\'https://fonts.googleapis.com/css2?family=Outfit:wght@400
 +'.bp-pass{display:flex;align-items:center;gap:8px;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;margin:0 12px 6px;font-size:12px;color:#166534;font-weight:500}'
 +'.bp-img-card{border:1px solid #f1f5f9;border-radius:10px;margin:0 12px 7px;padding:10px 12px;display:flex;gap:10px;align-items:center}'
 +'.bp-img-thumb{width:48px;height:36px;border-radius:6px;object-fit:cover;background:#f1f5f9;flex-shrink:0}'
-+'.bp-img-src{font-size:10px;color:#94a3b8;word-break:break-all;margin-top:2px}';
++'.bp-img-src{font-size:10px;color:#94a3b8;word-break:break-all;margin-top:2px}'
++'#bp-actions{display:none;padding:10px 14px;background:#f8fafc;border-bottom:1px solid #f1f5f9;gap:8px;flex-shrink:0}'
++'#bp-actions.visible{display:flex}'
++'.bp-action-btn{flex:1;display:flex;align-items:center;justify-content:center;gap:7px;padding:9px 12px;border-radius:9px;border:1px solid #e2e8f0;background:#fff;font-family:Outfit,sans-serif;font-size:12px;font-weight:700;cursor:pointer;transition:background .15s,border-color .15s}'
++'.bp-action-btn:hover{background:#f1f5f9;border-color:#cbd5e1}'
++'#bp-pdf-btn{color:#1A56DB}'
++'#bp-rescan-btn{color:#0d9488}'
++'#bp-rescan-btn.scanning{opacity:.6;pointer-events:none}';
 var sty=document.createElement('style');sty.textContent=css;document.head.appendChild(sty);
 var ov=document.createElement('div');ov.id='beacon-overlay';document.body.appendChild(ov);
 var pan=document.createElement('div');pan.id='beacon-panel';pan.setAttribute('role','dialog');pan.setAttribute('aria-label','Beacon Accessibility Scanner Results');
-pan.innerHTML='<div id="bp-header"><span id="bp-logo">\\u267F</span><div><div id="bp-title">Beacon Scanner</div><div id="bp-sub">WCAG 2.1 + 2.2 \\u00B7 ADA \\u00B7 \\u00A7508</div></div><button id="bp-close" aria-label="Close scanner panel">\\u00D7</button></div><div id="bp-scanning"><div id="bp-spinner"></div><div id="bp-scan-txt">Scanning page\\u2026</div></div><div id="bp-body" style="display:none"></div>';
+pan.innerHTML='<div id="bp-header"><span id="bp-logo">\\u267F</span><div><div id="bp-title">Beacon Scanner</div><div id="bp-sub">WCAG 2.1 + 2.2 \\u00B7 ADA \\u00B7 \\u00A7508</div></div><button id="bp-close" aria-label="Close scanner panel">\\u00D7</button></div><div id="bp-actions"><button class="bp-action-btn" id="bp-pdf-btn" aria-label="Download PDF report">\\uD83D\\uDCC4 Download PDF</button><button class="bp-action-btn" id="bp-rescan-btn" aria-label="Rescan this page">\\u21BB Rescan</button></div><div id="bp-scanning"><div id="bp-spinner"></div><div id="bp-scan-txt">Scanning page\\u2026</div></div><div id="bp-body" style="display:none"></div>';
 document.body.appendChild(pan);
 document.getElementById('bp-close').onclick=function(){pan.style.display='none';ov.style.display='none';};
 ov.onclick=function(){pan.style.display='none';ov.style.display='none';};
@@ -585,7 +592,116 @@ function runScan(){
   }
   bod.innerHTML=h;
   setTimeout(function(){var bar=document.getElementById('bp-score-bar');if(bar)bar.style.width=score+'%';},100);
+  // Show action buttons
+  var actBar=document.getElementById('bp-actions');if(actBar)actBar.classList.add('visible');
 }
+
+function openReport(){
+  function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  var date=new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  var safeUrl=esc(location.href);
+  var scoreColor=score>=90?'#0D7A3E':score>=70?'#1A56DB':score>=50?'#C05600':'#C41C1C';
+  var grade=score>=90?'A':score>=80?'B':score>=70?'C':score>=60?'D':'F';
+  var sc={critical:0,serious:0,moderate:0,minor:0};
+  issues.forEach(function(i){sc[i.sev]=(sc[i.sev]||0)+1;});
+  var adaRisk=(sc.critical>=1)?'Critical':(sc.serious>=3)?'High':(sc.serious>=1)?'Medium':'Low';
+  var adaStyle=adaRisk==='Critical'?'background:#FEE2E2;color:#991b1b;border:1px solid #FCA5A5':adaRisk==='High'?'background:#FFEDD5;color:#9a3412;border:1px solid #fdba74':adaRisk==='Medium'?'background:#FEF9C3;color:#854d0e;border:1px solid #fde047':'background:#D1FAE5;color:#166534;border:1px solid #86efac';
+  var sevCSS={critical:'background:#FEE2E2;color:#C41C1C;border:1px solid #FCA5A5',serious:'background:#FFEDD5;color:#C05600;border:1px solid #FDB896',moderate:'background:#FEF9C3;color:#9A6800;border:1px solid #FDE68A',minor:'background:#D1FAE5;color:#0D7A3E;border:1px solid #6EE7B7'};
+  var doc='<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">';
+  doc+='<title>Beacon Report \\u2014 '+safeUrl+'</title>';
+  doc+='<style>';
+  doc+="@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');";
+  doc+='*{box-sizing:border-box;margin:0;padding:0}';
+  doc+='body{font-family:"DM Sans",sans-serif;background:#fff;color:#0D1421;font-size:14px;line-height:1.6}';
+  doc+='.wrap{max-width:820px;margin:0 auto;padding:48px}';
+  doc+='.no-print{background:#1A56DB;color:#fff;padding:13px 20px;text-align:center;display:flex;align-items:center;justify-content:center;gap:16px;border-radius:10px;margin-bottom:24px}';
+  doc+='.no-print kbd{background:rgba(255,255,255,.2);padding:2px 7px;border-radius:3px;font-size:12px}';
+  doc+='.print-btn{background:#fff;color:#1A56DB;border:none;padding:8px 18px;border-radius:6px;font-weight:700;cursor:pointer;font-size:13px}';
+  doc+='.header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:28px;border-bottom:2px solid #E2E6EF;margin-bottom:28px}';
+  doc+='.brand{font-size:21px;font-weight:800;color:#1A56DB;letter-spacing:-.3px}';
+  doc+='.meta{text-align:right;color:#4A5568;font-size:12px;line-height:2}';
+  doc+='.score-row{display:flex;gap:28px;align-items:center;background:#F8F9FC;border-radius:14px;padding:24px 28px;margin-bottom:24px;border:1px solid #E2E6EF}';
+  doc+='.score-circle{width:88px;height:88px;border-radius:50%;border:7px solid '+scoreColor+';display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0}';
+  doc+='.score-num{font-size:26px;font-weight:800;color:'+scoreColor+'}';
+  doc+='.score-grade{font-size:10px;color:#8A95A8;margin-top:1px}';
+  doc+='.badges{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}';
+  doc+='.badge{display:inline-block;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:600}';
+  doc+='.stats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px}';
+  doc+='.stat{flex:1;min-width:90px;background:#F8F9FC;border-radius:10px;padding:12px 14px;text-align:center;border:1px solid #E2E6EF}';
+  doc+='.stat-n{font-size:24px;font-weight:800;line-height:1}';
+  doc+='.stat-l{font-size:10px;color:#8A95A8;text-transform:uppercase;letter-spacing:.5px;margin-top:3px}';
+  doc+='.sec{font-size:15px;font-weight:700;color:#0D1421;margin:24px 0 12px;padding-bottom:7px;border-bottom:1px solid #E2E6EF}';
+  doc+='.issue{border:1px solid #E2E6EF;border-radius:9px;padding:13px 15px;margin-bottom:9px}';
+  doc+='.issue-head{display:flex;gap:8px;align-items:center;margin-bottom:5px;flex-wrap:wrap}';
+  doc+='.chip{padding:2px 9px;border-radius:99px;font-size:11px;font-weight:700}';
+  doc+='.wtag{background:#EBF1FF;color:#1A56DB;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600}';
+  doc+='.ititle{font-weight:600;font-size:13px}';
+  doc+='.idesc{font-size:12px;color:#4A5568;margin:5px 0;line-height:1.6}';
+  doc+='.ifix{font-size:12px;color:#065F46;background:#D1FAE5;border:1px solid #6EE7B7;border-radius:6px;padding:7px 10px}';
+  doc+='.pass{display:flex;gap:8px;align-items:center;padding:8px 12px;background:#D1FAE5;border-radius:7px;margin-bottom:5px;font-size:12px}';
+  doc+='.ada-banner{background:#FEF2F2;border:1px solid #FCA5A5;border-radius:10px;padding:13px 16px;margin-bottom:20px}';
+  doc+='.footer{margin-top:40px;padding-top:20px;border-top:1px solid #E2E6EF;display:flex;justify-content:space-between;color:#8A95A8;font-size:11px}';
+  doc+='@media print{.no-print{display:none!important}.issue{break-inside:avoid}.wrap{padding:28px}@page{margin:12mm;size:A4}}';
+  doc+='</style></head><body><div class="wrap">';
+  doc+='<div class="no-print"><span>\\uD83D\\uDCCA <strong>Beacon Report ready.</strong> Save as PDF: <kbd>Ctrl+P</kbd> (Windows) or <kbd>\\u2318+P</kbd> (Mac) \\u2192 <em>Save as PDF</em></span><button class="print-btn" onclick="window.print()">\\uD83D\\uDDA8 Print / Save as PDF</button></div>';
+  if(sc.critical>0||sc.serious>0){
+    doc+='<div class="ada-banner"><strong>\\u26A0\\uFE0F ADA & Section 508 Risk</strong><br><span style="font-size:13px;color:#4A5568">This page has '+sc.critical+' critical and '+sc.serious+' serious issues that may expose this site to legal action under ADA Title III and Section 508. Manual testing is recommended.</span></div>';
+  }
+  doc+='<div class="header"><div><div class="brand">\\u267F Beacon Accessibility Report</div><div style="color:#8A95A8;font-size:12px;margin-top:3px">WCAG 2.1 AA \\u2022 WCAG 2.2 \\u2022 ADA Title III \\u2022 Section 508</div></div>';
+  doc+='<div class="meta"><div><strong>URL:</strong> '+safeUrl+'</div><div><strong>Date:</strong> '+date+'</div><div><strong>Standard:</strong> WCAG 2.1 AA + 2.2</div><div><strong>Compliance:</strong> ADA Title III \\u2022 Section 508</div></div></div>';
+  doc+='<div class="score-row"><div class="score-circle"><div class="score-num">'+score+'</div><div class="score-grade">Grade '+grade+'</div></div>';
+  doc+='<div style="flex:1"><div style="font-size:19px;font-weight:800;color:'+scoreColor+';margin-bottom:5px">'+(score>=90?'Excellent':score>=80?'Good':score>=70?'Needs Improvement':score>=60?'Needs Work':'Critical')+'</div>';
+  doc+='<div style="font-size:13px;color:#4A5568;line-height:1.6;margin-bottom:8px">This page scored '+score+'/100 on automated accessibility checks.</div>';
+  doc+='<div class="badges"><span class="badge" style="background:#EBF1FF;color:#1A56DB;border:1px solid #BFDBFE">WCAG 2.1/2.2 \\u2022 ADA \\u2022 \\u00A7508</span><span class="badge" style="'+adaStyle+'">\\u2696\\uFE0F ADA Risk: '+adaRisk+'</span></div></div></div>';
+  doc+='<div class="stats">';
+  var statItems=[['Critical',sc.critical,'#C41C1C'],['Serious',sc.serious,'#C05600'],['Moderate',sc.moderate,'#9A6800'],['Minor',sc.minor,'#0D7A3E'],['Alt Issues',imgs.length,'#C05600'],['Total Images',document.querySelectorAll('img').length,'#4A5568']];
+  statItems.forEach(function(s){doc+='<div class="stat"><div class="stat-n" style="color:'+s[2]+'">'+s[1]+'</div><div class="stat-l">'+s[0]+'</div></div>';});
+  doc+='</div>';
+  if(issues.length){
+    doc+='<div class="sec">\\u26A0 Issues Found ('+issues.length+')</div>';
+    issues.forEach(function(issue){
+      doc+='<div class="issue"><div class="issue-head"><span class="chip" style="'+(sevCSS[issue.sev]||sevCSS.minor)+'">'+esc(issue.sev)+'</span><span class="wtag">'+esc(issue.wcag)+'</span><span class="ititle">'+esc(issue.title)+'</span></div>';
+      doc+='<div class="idesc">'+esc(issue.desc)+'</div>';
+      if(issue.el)doc+='<div style="font-family:monospace;font-size:10px;background:#F8F9FC;padding:7px 10px;border-radius:5px;margin:5px 0;overflow:hidden;word-break:break-all;color:#4A5568">'+esc(issue.el)+'</div>';
+      doc+='<div class="ifix"><strong>Fix:</strong> '+esc(issue.fix)+'</div></div>';
+    });
+  }
+  if(imgs.length){
+    doc+='<div class="sec">\\uD83D\\uDDBC Missing Alt Text ('+imgs.length+')</div>';
+    imgs.slice(0,20).forEach(function(img){
+      doc+='<div class="issue"><span class="chip" style="'+(img.missingAlt?sevCSS.critical:sevCSS.serious)+'">'+(img.missingAlt?'No alt attribute':'Empty alt')+'</span> <span style="font-family:monospace;font-size:11px;color:#4A5568;word-break:break-all;margin-left:8px">'+esc(img.srcRaw||'(no src)')+'</span></div>';
+    });
+    if(imgs.length>20)doc+='<p style="font-size:12px;color:#8A95A8;margin-top:8px">\\u2026 and '+(imgs.length-20)+' more.</p>';
+  }
+  if(passes.length){
+    doc+='<div class="sec">\\u2705 Checks Passed ('+passes.length+')</div>';
+    passes.forEach(function(p){doc+='<div class="pass"><span>\\u2713</span><span style="flex:1">'+esc(p.t)+'</span><span style="color:#0D7A3E;font-size:11px;font-weight:600">'+esc(p.w)+'</span></div>';});
+  }
+  doc+='<div class="footer"><div>Generated by Beacon Scanner \\u2014 '+date+' \\u2014 Automated scan covering WCAG 2.1 AA, WCAG 2.2, ADA Title III &amp; Section 508. Manual testing recommended for full compliance.</div></div>';
+  doc+='</div></body></html>';
+  try{
+    var blob=new Blob([doc],{type:'text/html'});
+    var burl=URL.createObjectURL(blob);
+    var w=window.open(burl,'_blank');
+    if(!w){var a=document.createElement('a');a.href=burl;a.target='_blank';document.body.appendChild(a);a.click();setTimeout(function(){document.body.removeChild(a);},500);}
+  }catch(e){var w2=window.open();if(w2){w2.document.write(doc);w2.document.close();}}
+}
+
+function doRescan(){
+  var btn=document.getElementById('bp-rescan-btn');
+  if(btn)btn.classList.add('scanning');
+  score=0;issues=[];imgs=[];passes=[];
+  document.getElementById('bp-body').style.display='none';
+  document.getElementById('bp-scanning').style.display='flex';
+  document.getElementById('bp-actions').classList.remove('visible');
+  setTimeout(function(){
+    runScan();
+    if(btn)btn.classList.remove('scanning');
+  },300);
+}
+
+document.getElementById('bp-pdf-btn').onclick=function(){openReport();};
+document.getElementById('bp-rescan-btn').onclick=function(){doRescan();};
 runScan();
 })();`;
 
