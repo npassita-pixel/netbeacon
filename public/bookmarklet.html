@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beacon — Bookmarklet Install</title>
+<style>
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0A0D14;
+  --surface:#111520;
+  --card:#161C2D;
+  --border:#1E2640;
+  --accent:#2563EB;
+  --accent2:#3B82F6;
+  --green:#10B981;
+  --text:#F0F4FF;
+  --sub:#8892A4;
+  --muted:#4A5568;
+}
+body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;min-height:100vh;overflow-x:hidden}
+body::before{
+  content:'';position:fixed;inset:0;
+  background-image:linear-gradient(rgba(37,99,235,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(37,99,235,.04) 1px,transparent 1px);
+  background-size:48px 48px;pointer-events:none;z-index:0
+}
+.wrap{position:relative;z-index:1;max-width:860px;margin:0 auto;padding:0 24px 80px}
+nav{display:flex;align-items:center;justify-content:space-between;padding:24px 0;margin-bottom:8px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:20px;letter-spacing:-.3px}
+.logo-icon{width:36px;height:36px;background:var(--accent);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 0 20px #2563eb44}
+.nav-badge{background:var(--border);color:var(--sub);padding:5px 12px;border-radius:99px;font-size:12px;font-weight:600;border:1px solid var(--border)}
+.hero{text-align:center;padding:56px 0 48px}
+.hero-eyebrow{display:inline-flex;align-items:center;gap:7px;background:rgba(37,99,235,.12);border:1px solid rgba(37,99,235,.25);color:var(--accent2);padding:6px 14px;border-radius:99px;font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;margin-bottom:24px}
+.hero h1{font-size:clamp(36px,6vw,62px);font-weight:900;letter-spacing:-2px;line-height:1.05;margin-bottom:18px}
+.hero h1 span{background:linear-gradient(135deg,#2563EB,#60A5FA);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero p{color:var(--sub);font-size:17px;line-height:1.7;max-width:520px;margin:0 auto 40px}
+.steps{display:flex;gap:8px;justify-content:center;margin-bottom:48px;flex-wrap:wrap}
+.step{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:99px;padding:8px 16px;font-size:13px;font-weight:600;color:var(--sub)}
+.step-n{width:22px;height:22px;background:var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;flex-shrink:0}
+.step-arrow{color:var(--muted);font-size:16px}
+.drag-card{background:var(--card);border:1px solid var(--border);border-radius:24px;padding:40px;text-align:center;margin-bottom:32px;position:relative;overflow:hidden}
+.drag-card::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 0%,rgba(37,99,235,.08),transparent 70%);pointer-events:none}
+.drag-card h2{font-size:22px;font-weight:800;margin-bottom:8px;letter-spacing:-.3px}
+.drag-card p{color:var(--sub);font-size:14px;margin-bottom:32px;line-height:1.6}
+.bm-btn{
+  display:inline-flex;align-items:center;gap:12px;
+  background:linear-gradient(135deg,#1D4ED8,#2563EB);
+  color:#fff;padding:16px 28px;border-radius:16px;
+  font-family:'Outfit',sans-serif;font-size:16px;font-weight:700;
+  text-decoration:none;cursor:grab;user-select:none;
+  box-shadow:0 4px 24px rgba(37,99,235,.45),0 1px 2px rgba(0,0,0,.3);
+  border:1px solid rgba(255,255,255,.15);
+  transition:transform .15s,box-shadow .15s;
+  position:relative;
+}
+.bm-btn:active{cursor:grabbing}
+.bm-btn:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(37,99,235,.55)}
+.bm-btn-icon{font-size:22px}
+.bm-btn-text{display:flex;flex-direction:column;text-align:left;line-height:1.2}
+.bm-btn-title{font-size:15px;font-weight:800}
+.bm-btn-sub{font-size:11px;font-weight:500;opacity:.75}
+.drag-hint{margin-top:20px;color:var(--muted);font-size:12px;display:flex;align-items:center;justify-content:center;gap:6px}
+.drag-hint-arrow{font-size:20px;animation:bounce .8s ease infinite alternate}
+@keyframes bounce{from{transform:translateY(0)}to{transform:translateY(-6px)}}
+.how{background:var(--card);border:1px solid var(--border);border-radius:24px;padding:36px;margin-bottom:32px}
+.how h2{font-size:20px;font-weight:800;margin-bottom:24px;letter-spacing:-.2px}
+.how-steps{display:flex;flex-direction:column;gap:16px}
+.how-step{display:flex;gap:16px;align-items:flex-start}
+.how-step-n{width:32px;height:32px;border-radius:10px;background:rgba(37,99,235,.15);border:1px solid rgba(37,99,235,.3);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:var(--accent2);flex-shrink:0;margin-top:1px}
+.how-step-body h3{font-size:14px;font-weight:700;margin-bottom:3px}
+.how-step-body p{font-size:13px;color:var(--sub);line-height:1.6}
+.how-step-body code{background:rgba(255,255,255,.06);border:1px solid var(--border);padding:1px 7px;border-radius:5px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#93C5FD}
+.features{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:32px}
+@media(max-width:600px){.features{grid-template-columns:1fr}}
+.feature{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px}
+.feature-icon{font-size:24px;margin-bottom:10px}
+.feature h3{font-size:14px;font-weight:700;margin-bottom:4px}
+.feature p{font-size:12px;color:var(--sub);line-height:1.6}
+footer{text-align:center;color:var(--muted);font-size:12px;padding-top:32px;border-top:1px solid var(--border)}
+footer span{color:var(--accent2)}
+</style>
+</head>
+<body>
+<a href="#main-content" class="sr-only" onfocus="this.style.position='fixed';this.style.left='16px';this.style.top='16px';this.style.width='auto';this.style.height='auto';this.style.clip='auto';this.style.background='#2563eb';this.style.color='#fff';this.style.padding='8px 16px';this.style.borderRadius='4px';this.style.zIndex='999';this.style.fontSize='14px';this.style.fontWeight='600'" onblur="this.style.position='absolute';this.style.left='-9999px';this.style.width='1px';this.style.height='1px';this.style.clip='rect(0,0,0,0)'">Skip to main content</a>
+<div class="wrap"><main id="main-content">
+  <nav>
+    <div class="logo">
+      <div class="logo-icon" aria-hidden="true">&#9855;</div>
+      Beacon
+    </div>
+    <div class="nav-badge">38 Checks &middot; WCAG 2.1 + 2.2 &middot; ADA &middot; &sect;508</div>
+  </nav>
+  <div class="hero">
+    <div class="hero-eyebrow">
+      &#9889; No install &middot; No extension &middot; Works everywhere
+    </div>
+    <h1>Scan any website<br><span>in one click</span></h1>
+    <p>Drag the button below to your bookmarks bar. Then click it on any website to get an instant ADA &amp; WCAG 2.1 + 2.2 accessibility audit &mdash; 38 checks, powered by real DOM scanning, not a proxy.</p>
+    <div class="steps">
+      <div class="step"><div class="step-n">1</div> Drag button to bookmarks bar</div>
+      <div class="step-arrow">&rarr;</div>
+      <div class="step"><div class="step-n">2</div> Visit any website</div>
+      <div class="step-arrow">&rarr;</div>
+      <div class="step"><div class="step-n">3</div> Click the bookmark</div>
+      <div class="step-arrow">&rarr;</div>
+      <div class="step"><div class="step-n">4</div> Get your score</div>
+    </div>
+  </div>
+  <!-- ── DRAG THIS ── -->
+  <div class="drag-card">
+    <h2>Install Beacon Scanner</h2>
+    <p>Drag the button below to your bookmarks bar. If that doesn't work, right-click &rarr; Bookmark this link, or use the manual install steps below.</p>
+    <a class="bm-btn" id="bm" href="#">
+      <span class="bm-btn-icon" aria-hidden="true">&#9855;</span>
+      <span class="bm-btn-text">
+        <span class="bm-btn-title">Beacon Scanner</span>
+        <span class="bm-btn-sub">Drag me to your bookmarks bar</span>
+      </span>
+    </a>
+    <div class="drag-hint">
+      <span class="drag-hint-arrow" aria-hidden="true">&#8593;</span> Drag this button up to your bookmarks bar
+    </div>
+  </div>
+
+  <!-- ── HOW TO USE ── -->
+  <div class="how">
+    <h2>How to use</h2>
+    <div class="how-steps">
+      <div class="how-step">
+        <div class="how-step-n">1</div>
+        <div class="how-step-body">
+          <h3>Show bookmarks bar</h3>
+          <p>Press <code>Ctrl+Shift+B</code> (Windows/Linux) or <code>Cmd+Shift+B</code> (Mac) to toggle the bookmarks bar in Chrome.</p>
+        </div>
+      </div>
+      <div class="how-step">
+        <div class="how-step-n">2</div>
+        <div class="how-step-body">
+          <h3>Drag the button</h3>
+          <p>Click and drag the blue <strong>Beacon Scanner</strong> button above into your bookmarks bar. You'll see a small icon appear.</p>
+        </div>
+      </div>
+      <div class="how-step">
+        <div class="how-step-n">3</div>
+        <div class="how-step-body">
+          <h3>Visit any page</h3>
+          <p>Navigate to any website you want to audit — your own site, a competitor, or any public URL.</p>
+        </div>
+      </div>
+      <div class="how-step">
+        <div class="how-step-n">4</div>
+        <div class="how-step-body">
+          <h3>Click the bookmark</h3>
+          <p>Click <strong>Beacon Scanner</strong> in your bookmarks bar. A side panel will slide in with your accessibility score, issues, and fixes.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── FEATURES ── -->
+  <div class="features">
+    <div class="feature">
+      <div class="feature-icon" aria-hidden="true">&#128269;</div>
+      <h3>38 WCAG Checks</h3>
+      <p>Covers WCAG 2.1 AA + select WCAG 2.2 criteria including color contrast, alt text, focus indicators, touch targets, and more.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon" aria-hidden="true">&#9889;</div>
+      <h3>Instant Results</h3>
+      <p>Runs entirely in your browser — no data sent to any server. Results appear in under 2 seconds.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon" aria-hidden="true">&#128272;</div>
+      <h3>Privacy First</h3>
+      <p>Zero tracking, zero cookies, zero network calls. The scanner runs 100% client-side on the page you're viewing.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon" aria-hidden="true">&#9878;</div>
+      <h3>ADA &amp; 508 Aligned</h3>
+      <p>Scoring aligned with ADA Title III and Section 508 requirements. Identifies legal risk from critical and serious failures.</p>
+    </div>
+  </div>
+
+  <footer>
+    Built by <span>Beacon</span> &middot; WCAG 2.1 AA + 2.2 &middot; Open-source accessibility scanner
+  </footer>
+</main></div>
+
+<script>
+// Build the bookmarklet JS and URL-encode it into the button href
+(function() {
+  // The bookmarklet scanner code — recalibrated scoring matching api/scan.js
+  var bmCode = `(function(){
+if(window.__BeaconScanner){var ep=document.getElementById('beacon-panel');if(ep){ep.style.display='flex';document.getElementById('beacon-overlay').style.display='block';}return;}
+window.__BeaconScanner=true;
+var PR='#2563EB';
+var score=0;var issues=[];var imgs=[];var passes=[];
+var css='@import url(\\'https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap\\');'
++'#beacon-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2147483640;}'
++'#beacon-panel{position:fixed;top:0;right:0;bottom:0;width:420px;max-width:100%;background:#fff;z-index:2147483641;display:flex;flex-direction:column;box-shadow:-8px 0 40px rgba(0,0,0,.18);animation:bSlideIn .25s cubic-bezier(.4,0,.2,1);font-family:Outfit,sans-serif;}'
++'@keyframes bSlideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}'
++'#bp-header{background:'+PR+';padding:16px 18px;display:flex;align-items:center;gap:12px;flex-shrink:0}'
++'#bp-logo{font-size:22px}'
++'#bp-title{flex:1;color:#fff;font-weight:800;font-size:16px;letter-spacing:-.2px}'
++'#bp-sub{color:rgba(255,255,255,.7);font-size:11px;margin-top:1px}'
++'#bp-close{background:rgba(255,255,255,.2);border:none;color:#fff;width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:17px;line-height:1;}'
++'#bp-scanning{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px}'
++'#bp-spinner{width:48px;height:48px;border:4px solid #e2e8f0;border-top-color:'+PR+';border-radius:50%;animation:bSpin .8s linear infinite}'
++'@keyframes bSpin{to{transform:rotate(360deg)}}'
++'#bp-scan-txt{font-size:14px;color:#64748b;font-weight:500}'
++'#bp-body{flex:1;overflow-y:auto;padding:0 0 20px}'
++'#bp-body::-webkit-scrollbar{width:4px}'
++'#bp-body::-webkit-scrollbar-thumb{background:#e2e8f0;border-radius:99px}'
++'#bp-score-hero{padding:24px 20px 16px;text-align:center;border-bottom:1px solid #f1f5f9}'
++'.bp-ring-wrap{display:inline-block;position:relative;margin-bottom:8px}'
++'.bp-grade{position:absolute;bottom:4px;right:4px;width:28px;height:28px;border-radius:50%;color:#fff;font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center}'
++'#bp-score-label{font-size:20px;font-weight:800;margin-bottom:4px}'
++'#bp-score-url{font-size:11px;color:#94a3b8;margin-bottom:12px;word-break:break-all}'
++'#bp-score-bar-wrap{background:#f1f5f9;border-radius:99px;height:8px;overflow:hidden;margin:0 20px 6px}'
++'#bp-score-bar{height:100%;border-radius:99px;transition:width 1.4s cubic-bezier(.4,0,.2,1)}'
++'#bp-score-pct{font-size:12px;font-weight:700;margin-bottom:14px}'
++'.bp-stats{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid #f1f5f9;border-radius:12px;overflow:hidden;margin:0 20px 4px}'
++'.bp-stat{padding:10px 6px;text-align:center;border-right:1px solid #f1f5f9}'
++'.bp-stat:last-child{border-right:none}'
++'.bp-stat-n{font-size:18px;font-weight:800}'
++'.bp-stat-l{font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-top:1px}'
++'.bp-section{padding:14px 20px 6px;font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:1.2px;text-transform:uppercase;display:flex;align-items:center;gap:8px}'
++'.bp-section::after{content:"";flex:1;height:1px;background:#f1f5f9}'
++'.bp-issue{border:1px solid #f1f5f9;border-radius:10px;margin:0 12px 7px;overflow:hidden}'
++'.bp-issue-head{display:flex;align-items:center;gap:9px;padding:11px 13px;cursor:pointer;background:#fff;border:none;width:100%;text-align:left;font-family:Outfit,sans-serif}'
++'.bp-issue-head:hover{background:#fafbfc}'
++'.bp-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}'
++'.bp-chip{padding:2px 8px;border-radius:99px;font-size:10px;font-weight:700;flex-shrink:0}'
++'.bp-issue-title{flex:1;font-size:12px;font-weight:600;color:#1e293b}'
++'.bp-wcag{font-size:10px;color:#64748b;background:#f8fafc;padding:2px 6px;border-radius:5px;flex-shrink:0}'
++'.bp-arr{color:#cbd5e1;font-size:12px;flex-shrink:0}'
++'.bp-issue-body{padding:0 13px 13px;border-top:1px solid #f8fafc;background:#fafbfc;display:none}'
++'.bp-issue-body.open{display:block}'
++'.bp-desc{font-size:12px;color:#475569;line-height:1.7;margin:10px 0 8px}'
++'.bp-code{background:#0f1623;color:#7dd3fc;padding:9px 12px;border-radius:7px;font-size:10px;font-family:monospace;overflow-x:auto;margin-bottom:8px;white-space:pre-wrap;word-break:break-all}'
++'.bp-fix{background:#dcfce7;border:1px solid #86efac;border-radius:7px;padding:8px 11px;font-size:11px;color:#166534;line-height:1.6}'
++'.bp-pass{display:flex;align-items:center;gap:8px;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;margin:0 12px 6px;font-size:12px;color:#166534;font-weight:500}'
++'.bp-img-card{border:1px solid #f1f5f9;border-radius:10px;margin:0 12px 7px;padding:10px 12px;display:flex;gap:10px;align-items:center}'
++'.bp-img-thumb{width:48px;height:36px;border-radius:6px;object-fit:cover;background:#f1f5f9;flex-shrink:0}'
++'.bp-img-src{font-size:10px;color:#94a3b8;word-break:break-all;margin-top:2px}';
+var sty=document.createElement('style');sty.textContent=css;document.head.appendChild(sty);
+var ov=document.createElement('div');ov.id='beacon-overlay';document.body.appendChild(ov);
+var pan=document.createElement('div');pan.id='beacon-panel';pan.setAttribute('role','dialog');pan.setAttribute('aria-label','Beacon Accessibility Scanner Results');
+pan.innerHTML='<div id="bp-header"><span id="bp-logo">\\u267F</span><div><div id="bp-title">Beacon Scanner</div><div id="bp-sub">WCAG 2.1 + 2.2 \\u00B7 ADA \\u00B7 \\u00A7508</div></div><button id="bp-close" aria-label="Close scanner panel">\\u00D7</button></div><div id="bp-scanning"><div id="bp-spinner"></div><div id="bp-scan-txt">Scanning page\\u2026</div></div><div id="bp-body" style="display:none"></div>';
+document.body.appendChild(pan);
+document.getElementById('bp-close').onclick=function(){pan.style.display='none';ov.style.display='none';};
+ov.onclick=function(){pan.style.display='none';ov.style.display='none';};
+
+function runScan(){
+  var ded=0;
+  function push(sev,title,wcag,desc,fix,el){
+    var snippet='';
+    if(el){try{snippet=el.outerHTML?el.outerHTML.slice(0,120):'';}catch(e){}}
+    issues.push({sev:sev,title:title,wcag:wcag,desc:desc,fix:fix,el:snippet});
+  }
+  function pass(t,w){passes.push({t:t,w:w});}
+
+  function isTrackingPixel(img){
+    var s=img.getAttribute('src')||'';
+    var w=img.getAttribute('width'),h=img.getAttribute('height');
+    if((w==='1'||w===1)&&(h==='1'||h===1))return true;
+    return['/pixel/','/track/','/beacon','/collect','adsct','bat.bing','trkn.us','arttrk.','adxcel','bidr.io','ispot.tv','mdhv.io','dmpxs.com'].some(function(p){return s.includes(p);});
+  }
+
+  // 1.1.1 Alt text
+  var allImgs=document.querySelectorAll('img');
+  var miss=[],decoImgs=[];
+  Array.from(allImgs).forEach(function(img){
+    if(isTrackingPixel(img))return;
+    var role=img.getAttribute('role');
+    if(role==='presentation'||role==='none')return;
+    if(!img.hasAttribute('alt')){miss.push(img);imgs.push({src:img.src,srcRaw:(img.getAttribute('src')||'').slice(0,80),missingAlt:true});}
+    else if(img.getAttribute('alt').trim()===''){decoImgs.push(img);imgs.push({src:img.src,srcRaw:(img.getAttribute('src')||'').slice(0,80),missingAlt:false});}
+  });
+  if(miss.length){ded+=miss.length<=2?4:miss.length<=5?7:10;push('critical','Images missing alt text ('+miss.length+')','1.1.1','Images with no alt attribute are invisible to screen readers.','Add descriptive alt text to each image, or alt="" for decorative images.',miss[0]);}
+  else pass('Alt text present on all images','1.1.1');
+  if(decoImgs.length)push('minor',decoImgs.length+' image(s) with empty alt \\u2014 verify decorative','1.1.1','Images with alt="" are treated as decorative. Confirm they add no meaning.','If the image conveys information, add descriptive alt text.',decoImgs[0]);
+
+  // 1.2.2 Video captions
+  var videos=document.querySelectorAll('video');
+  var noCaptions=Array.from(videos).filter(function(v){return!v.querySelector('track[kind=captions]');});
+  if(noCaptions.length){ded+=6;push('serious',noCaptions.length+' video(s) without captions','1.2.2','Videos must have synchronized captions.','Add <track kind="captions"> to each video element.',noCaptions[0]);}
+
+  // 1.3.1 Heading structure
+  var h1s=document.querySelectorAll('h1');
+  if(h1s.length===0){ded+=4;push('serious','Missing H1 heading','1.3.1','Page has no H1. Screen readers use H1 as the main landmark.','Add a single H1 heading that describes the page content.',null);}
+  else if(h1s.length>1){ded+=2;push('moderate','Multiple H1 headings ('+h1s.length+')','1.3.1','Only one H1 per page is recommended.','Keep one H1 and demote others to H2 or lower.',h1s[1]);}
+  else pass('Single H1 present','1.3.1');
+
+  // Heading skip
+  var hLevels=Array.from(document.querySelectorAll('h1,h2,h3,h4,h5,h6')).map(function(h){return parseInt(h.tagName[1]);});
+  var skipped=false;
+  for(var i=1;i<hLevels.length;i++){if(hLevels[i]-hLevels[i-1]>1){skipped=true;break;}}
+  if(skipped){ded+=3;push('moderate','Heading levels skipped','1.3.1','Heading levels jump (e.g. H2 to H4). Screen reader users lose navigation context.','Use sequential heading levels without skipping.',null);}
+  else pass('Heading hierarchy is sequential','1.3.1');
+
+  // 1.3.1 Unlabeled inputs
+  var inputs=Array.from(document.querySelectorAll('input,select,textarea')).filter(function(inp){
+    if(inp.type==='hidden'||inp.type==='submit'||inp.type==='button'||inp.type==='reset')return false;
+    var id=inp.id;
+    var hasLabel=id&&document.querySelector('label[for="'+id+'"]');
+    var hasAria=inp.getAttribute('aria-label')||inp.getAttribute('aria-labelledby');
+    var hasTitle=inp.getAttribute('title');
+    var wrapped=inp.closest('label');
+    return!hasLabel&&!hasAria&&!hasTitle&&!wrapped;
+  });
+  if(inputs.length){ded+=inputs.length<=2?6:10;push('critical',inputs.length+' unlabeled form input(s)','1.3.1','Form fields must have associated labels for screen readers.','Add a <label for="id"> or aria-label to each input.',inputs[0]);}
+  else pass('All form inputs have labels','1.3.1');
+
+  // 1.4.1 Color only
+  var colorLinks=Array.from(document.querySelectorAll('a')).filter(function(a){
+    var s=window.getComputedStyle(a);
+    return s.textDecoration.indexOf('underline')===-1&&s.fontWeight<700;
+  });
+  if(colorLinks.length>5){ded+=3;push('moderate','Links may rely on color alone ('+colorLinks.length+')','1.4.1','Links should be distinguishable without color (underline or bold).','Add text-decoration: underline or another visual cue.',colorLinks[0]);}
+  else pass('Links are visually distinguishable','1.4.1');
+
+  // 1.4.2 Autoplay audio
+  var autoAudio=document.querySelectorAll('audio[autoplay],video[autoplay]');
+  if(autoAudio.length){ded+=5;push('serious','Autoplaying media found','1.4.2','Media should not autoplay \\u2014 distracting for screen reader users.','Remove autoplay or provide controls to stop.',autoAudio[0]);}
+  else pass('No autoplaying media','1.4.2');
+
+  // 1.4.3 Color contrast
+  var contrastFails=[];
+  function getLuminance(r,g,b){var a=[r,g,b].map(function(v){v/=255;return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4);});return a[0]*0.2126+a[1]*0.7152+a[2]*0.0722;}
+  function parseColor(c){var m=c.match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)/);return m?[parseInt(m[1]),parseInt(m[2]),parseInt(m[3])]:null;}
+  function effectiveBg(el){var node=el;while(node&&node!==document.body.parentElement){var cs=window.getComputedStyle(node);var bg=parseColor(cs.backgroundColor);if(bg&&cs.backgroundColor!=='transparent'&&cs.backgroundColor!=='rgba(0, 0, 0, 0)')return bg;node=node.parentElement;}return[255,255,255];}
+  var textEls=Array.from(document.querySelectorAll('p,span,a,li,td,th,label,button,h1,h2,h3,h4,h5,h6')).filter(function(el){var cs=window.getComputedStyle(el);return cs.display!=='none'&&cs.visibility!=='hidden';}).slice(0,80);
+  textEls.forEach(function(el){
+    var cs=window.getComputedStyle(el);
+    var fg=parseColor(cs.color);if(!fg)return;
+    var bg=effectiveBg(el);
+    var L1=getLuminance(fg[0],fg[1],fg[2]),L2=getLuminance(bg[0],bg[1],bg[2]);
+    var ratio=(Math.max(L1,L2)+0.05)/(Math.min(L1,L2)+0.05);
+    var fontSize=parseFloat(cs.fontSize);
+    var isBold=parseInt(cs.fontWeight)>=700;
+    var isLarge=fontSize>=18||(isBold&&fontSize>=14);
+    var required=isLarge?3:4.5;
+    if(ratio<required)contrastFails.push({el:el,ratio:ratio.toFixed(2),required:required});
+  });
+  if(contrastFails.length){ded+=contrastFails.length<=3?5:contrastFails.length<=8?8:12;push('serious',contrastFails.length+' color contrast failure(s)','1.4.3','Text must have '+contrastFails[0].required+':1 contrast ratio. Found '+contrastFails[0].ratio+':1.','Increase text color contrast to meet WCAG AA minimums.',contrastFails[0].el);}
+  else pass('Color contrast passes on sampled elements','1.4.3');
+
+  // 1.4.4 Zoom disabled
+  var viewport=document.querySelector('meta[name=viewport]');
+  if(viewport&&(viewport.content.includes('user-scalable=no')||viewport.content.includes('maximum-scale=1'))){ded+=5;push('serious','Zoom is disabled','1.4.4','user-scalable=no prevents low-vision users from zooming.','Remove user-scalable=no and maximum-scale=1 from viewport meta.',viewport);}
+  else pass('Zoom not disabled','1.4.4');
+
+  // 1.4.10 Horizontal scroll
+  if(document.body.scrollWidth>window.innerWidth+10){ded+=3;push('moderate','Horizontal scrolling detected','1.4.10','Content should reflow at 320px width without horizontal scroll.','Use responsive CSS and avoid fixed pixel widths.',null);}
+  else pass('No horizontal scroll at current width','1.4.10');
+
+  // 1.3.6 Landmarks
+  var hasMain=document.querySelector('main,[role=main]');
+  if(!hasMain){ded+=2;push('minor','No <main> landmark','1.3.6','Page structure is unclear without landmark regions.','Add a <main> element around the primary content.',null);}
+  else pass('Landmarks present','1.3.6');
+
+  // 2.1.1 Positive tabindex
+  var posTabs=document.querySelectorAll('[tabindex]');
+  var badTabs=Array.from(posTabs).filter(function(el){return parseInt(el.getAttribute('tabindex'))>0;});
+  if(badTabs.length){ded+=3;push('moderate','Positive tabindex values found ('+badTabs.length+')','2.1.1','tabindex > 0 disrupts natural focus order.','Remove positive tabindex values; use DOM order instead.',badTabs[0]);}
+  else pass('No positive tabindex values','2.1.1');
+
+  // Negative tabindex on interactive
+  var negTabs=Array.from(document.querySelectorAll('a[href][tabindex="-1"],button[tabindex="-1"]'));
+  if(negTabs.length){ded+=3;push('moderate','Interactive elements removed from tab order ('+negTabs.length+')','2.1.1','tabindex=-1 makes elements unreachable by keyboard.','Remove tabindex=-1 from interactive elements.',negTabs[0]);}
+
+  // 2.3.3 Reduced motion
+  var hasMotionQuery=false;
+  try{Array.from(document.styleSheets).forEach(function(sheet){try{Array.from(sheet.cssRules||[]).forEach(function(rule){if(rule.conditionText&&rule.conditionText.includes('prefers-reduced-motion'))hasMotionQuery=true;});}catch(e){}});}catch(e){}
+  var hasAnimations=Array.from(document.querySelectorAll('*')).slice(0,200).some(function(el){try{var s=window.getComputedStyle(el);return s.animationName!=='none';}catch(e){return false;}});
+  if(hasAnimations&&!hasMotionQuery){ded+=3;push('moderate','No prefers-reduced-motion media query','2.3.3','Animations should respect user motion preferences (WCAG 2.2).','Add @media (prefers-reduced-motion: reduce) to disable animations.',null);}
+  else if(hasMotionQuery)pass('prefers-reduced-motion supported','2.3.3');
+
+  // 2.4.1 Skip navigation
+  var skipSelectors=['a[href="#main-content"]','a[href="#main"]','a[href="#content"]','a[href="#skip"]','.skip-link','.skip-nav','[class*="skip-link"]','[class*="skip-nav"]'];
+  var hasSkip=skipSelectors.some(function(sel){try{return document.querySelector(sel);}catch(e){return false;}});
+  if(!hasSkip){ded+=3;push('moderate','No skip navigation link','2.4.1','Add a "Skip to main content" link as the first focusable element.','Add <a href="#main-content" class="skip-link">Skip to main content</a>.',null);}
+  else pass('Skip navigation link present','2.4.1');
+
+  // 2.4.2 Page title
+  if(!document.title||document.title.trim().length<2){ded+=4;push('serious','Missing or empty page title','2.4.2','Every page must have a descriptive <title> element.','Add a descriptive <title> to the <head>.',null);}
+  else pass('Page has a title: '+document.title.slice(0,50),'2.4.2');
+
+  // 2.4.4 Vague link text
+  var vague=['click here','here','read more','more','learn more','link','this','continue'];
+  var vagueLinks=Array.from(document.querySelectorAll('a')).filter(function(a){return vague.indexOf(a.textContent.trim().toLowerCase())!==-1;});
+  if(vagueLinks.length){ded+=vagueLinks.length<=3?3:5;push('moderate',vagueLinks.length+' vague link(s) found','2.4.4','Link text like "click here" is meaningless out of context.','Use descriptive link text that makes sense on its own.',vagueLinks[0]);}
+  else pass('Link text is descriptive','2.4.4');
+
+  // 2.4.4 Empty links
+  var emptyLinks=Array.from(document.querySelectorAll('a')).filter(function(a){
+    var txt=(a.textContent||'').trim();
+    var aria=a.getAttribute('aria-label');
+    var hasImg=a.querySelector('img[alt]:not([alt=""])');
+    return!txt&&!aria&&!hasImg;
+  });
+  if(emptyLinks.length){ded+=emptyLinks.length<=2?3:5;push('serious','Empty links ('+emptyLinks.length+')','2.4.4','Links with no text are meaningless to screen readers.','Add visible text or aria-label to each link.',emptyLinks[0]);}
+
+  // 2.4.4 target=_blank without warning
+  var blankLinks=Array.from(document.querySelectorAll('a[target="_blank"]')).filter(function(a){
+    return!(a.getAttribute('aria-label')||'').includes('new')&&!(a.textContent||'').includes('new window');
+  });
+  if(blankLinks.length>2){ded+=2;push('minor',blankLinks.length+' links open new tab without warning','2.4.4','Users should be warned when links open in a new tab.','Add aria-label or text indicating "opens in new tab".',blankLinks[0]);}
+
+  // 2.4.6 Empty headings
+  var emptyH=Array.from(document.querySelectorAll('h1,h2,h3,h4,h5,h6')).filter(function(h){return h.textContent.trim().length===0;});
+  if(emptyH.length){ded+=3;push('moderate',emptyH.length+' empty heading(s)','2.4.6','Empty headings confuse screen reader navigation.','Remove empty headings or add text content.',emptyH[0]);}
+  else pass('No empty headings','2.4.6');
+
+  // 2.4.11 Focus indicators
+  var focusEls=Array.from(document.querySelectorAll('a,button,[tabindex="0"]')).slice(0,30);
+  var hiddenFocus=focusEls.filter(function(el){
+    try{var cs=window.getComputedStyle(el);var ow=parseFloat(cs.outlineWidth);var os=cs.outlineStyle;var shadow=cs.boxShadow;return(ow===0||os==='none')&&(!shadow||shadow==='none');}catch(e){return false;}
+  });
+  if(hiddenFocus.length>=3){ded+=5;push('serious','Focus indicator hidden ('+hiddenFocus.length+' elements)','2.4.11','outline:none without replacement makes keyboard navigation invisible.','Restore outline or add a visible :focus style.',hiddenFocus[0]);}
+  else pass('Focus indicators appear visible','2.4.11');
+
+  // 2.5.3 ARIA label mismatch
+  var mismatch=Array.from(document.querySelectorAll('[aria-label]')).filter(function(el){
+    var label=(el.getAttribute('aria-label')||'').toLowerCase().trim();
+    var text=(el.textContent||'').toLowerCase().trim();
+    return text.length>2&&label.length>2&&!label.includes(text.slice(0,8))&&!text.includes(label.slice(0,8));
+  });
+  if(mismatch.length){ded+=mismatch.length<=3?4:6;push('serious','Possible aria-label mismatch ('+mismatch.length+')','2.5.3','aria-label should include visible text so speech users can activate by voice.','Ensure aria-label starts with or includes the visible text content.',mismatch[0]);}
+  else pass('Accessible names match visible text','2.5.3');
+
+  // 2.5.8 Touch targets
+  var smallTargets=Array.from(document.querySelectorAll('a,button,[role=button],[role=link]')).filter(function(el){var r=el.getBoundingClientRect();return r.width>0&&r.height>0&&(r.width<24||r.height<24);});
+  if(smallTargets.length){ded+=smallTargets.length<=3?3:5;push('moderate',smallTargets.length+' small touch target(s)','2.5.8','Interactive elements should be at least 24x24px (WCAG 2.2).','Increase padding or min-width/min-height to 24px.',smallTargets[0]);}
+  else pass('Touch targets meet minimum size','2.5.8');
+
+  // 3.1.1 Language
+  var lang=document.documentElement.getAttribute('lang');
+  if(!lang||lang.trim().length<2){ded+=5;push('serious','Page language not set','3.1.1','Add lang attribute to <html> so screen readers use the correct voice.','Add lang="en" (or appropriate code) to the <html> tag.',document.documentElement);}
+  else pass('Page language set: '+lang,'3.1.1');
+
+  // 3.3.2 Required fields
+  var reqInputs=Array.from(document.querySelectorAll('[required],[aria-required=true]'));
+  var unlabeledReq=reqInputs.filter(function(inp){return!inp.getAttribute('aria-label')&&!inp.getAttribute('aria-labelledby')&&!(inp.id&&document.querySelector('label[for="'+inp.id+'"]'));});
+  if(unlabeledReq.length){ded+=3;push('moderate',unlabeledReq.length+' required field(s) not labeled','3.3.2','Required fields must be clearly labeled and indicated.','Add labels and aria-required to required fields.',unlabeledReq[0]);}
+  else if(reqInputs.length)pass('Required fields are labeled','3.3.2');
+
+  // 4.1.1 Duplicate IDs
+  var allIds=Array.from(document.querySelectorAll('[id]')).map(function(e){return e.id;}).filter(Boolean);
+  var idCounts={};allIds.forEach(function(id){idCounts[id]=(idCounts[id]||0)+1;});
+  var dupIds=Object.keys(idCounts).filter(function(id){return idCounts[id]>1;});
+  if(dupIds.length){ded+=dupIds.length<=2?3:5;push('serious','Duplicate IDs ('+dupIds.length+')','4.1.1','Duplicate IDs break label associations and ARIA references.','Give each element a unique ID.',null);}
+  else pass('No duplicate IDs','4.1.1');
+
+  // 4.1.1 Invalid ARIA
+  var ariaEls=document.querySelectorAll('[role]');
+  var validRoles=['alert','alertdialog','application','article','banner','button','cell','checkbox','columnheader','combobox','complementary','contentinfo','definition','dialog','directory','document','feed','figure','form','grid','gridcell','group','heading','img','link','list','listbox','listitem','log','main','marquee','math','menu','menubar','menuitem','menuitemcheckbox','menuitemradio','navigation','none','note','option','presentation','progressbar','radio','radiogroup','region','row','rowgroup','rowheader','scrollbar','search','searchbox','separator','slider','spinbutton','status','switch','tab','table','tablist','tabpanel','term','textbox','timer','toolbar','tooltip','tree','treegrid','treeitem'];
+  var badRoles=Array.from(ariaEls).filter(function(el){return validRoles.indexOf(el.getAttribute('role'))===-1;});
+  if(badRoles.length){ded+=4;push('serious','Invalid ARIA role(s) found ('+badRoles.length+')','4.1.1','Invalid roles are ignored by assistive technologies.','Use only valid WAI-ARIA roles.',badRoles[0]);}
+  else pass('All ARIA roles are valid','4.1.1');
+
+  // 4.1.2 ARIA widget props
+  var ariaFails=Array.from(document.querySelectorAll("[role='switch'],[role='checkbox'],[role='radio']")).filter(function(el){return!el.hasAttribute('aria-checked');}).slice(0,5);
+  if(ariaFails.length){ded+=5;push('serious','ARIA widgets missing required properties ('+ariaFails.length+')','4.1.2','Custom ARIA widgets need required state properties.','Add aria-checked to switch/checkbox/radio widgets.',ariaFails[0]);}
+
+  // 4.1.2 Unnamed buttons
+  var unnamedBtns=Array.from(document.querySelectorAll('button,[role=button]')).filter(function(el){
+    return!el.textContent.trim()&&!el.getAttribute('aria-label')&&!el.getAttribute('aria-labelledby')&&!el.getAttribute('title');
+  });
+  if(unnamedBtns.length){ded+=unnamedBtns.length<=2?5:8;push('critical',unnamedBtns.length+' unnamed button(s)','4.1.2','Buttons must have accessible names for screen readers.','Add text, aria-label, or title to each button.',unnamedBtns[0]);}
+  else pass('All buttons have accessible names','4.1.2');
+
+  // 4.1.2 Unnamed iframes
+  var iframes=document.querySelectorAll('iframe');
+  var badIframes=Array.from(iframes).filter(function(f){return!f.getAttribute('title')&&!f.getAttribute('aria-label');});
+  if(badIframes.length){ded+=4;push('serious',badIframes.length+' iframe(s) missing title','4.1.2','Iframes must have a title attribute describing their content.','Add a descriptive title attribute to each iframe.',badIframes[0]);}
+  else if(iframes.length)pass('All iframes have titles','4.1.2');
+
+  // SVG accessible names
+  var badSvg=[];
+  document.querySelectorAll('svg').forEach(function(svg){
+    if(svg.getAttribute('aria-hidden')==='true'||svg.getAttribute('role')==='presentation')return;
+    try{var cs=window.getComputedStyle(svg);if(cs.display==='none'||cs.visibility==='hidden')return;}catch(e){}
+    var anc=svg.parentElement;while(anc){if(anc.getAttribute&&anc.getAttribute('aria-hidden')==='true')return;anc=anc.parentElement;}
+    var hasTitle=svg.querySelector('title');
+    var hasAria=svg.getAttribute('aria-label')||svg.getAttribute('aria-labelledby');
+    var parentBtn=svg.closest('button,a,[role="button"]');
+    var parentHasLabel=parentBtn&&(parentBtn.getAttribute('aria-label')||parentBtn.textContent.trim().length>1);
+    if(!hasTitle&&!hasAria&&!parentHasLabel)badSvg.push(svg);
+  });
+  if(badSvg.length){ded+=badSvg.length<=3?3:badSvg.length<=10?5:7;push('serious',badSvg.length+' SVG element(s) missing accessible name','4.1.2','Meaningful SVGs need a <title> or aria-label.','Add <title> inside <svg> or aria-label on the SVG.',badSvg[0]);}
+  else pass('SVGs have accessible names or are decorative','4.1.2');
+
+  // Sticky elements
+  var sticky=Array.from(document.querySelectorAll('*')).slice(0,500).filter(function(el){try{var p=window.getComputedStyle(el).position;return p==='sticky'||p==='fixed';}catch(e){return false;}});
+  if(sticky.length>2)push('minor',sticky.length+' sticky/fixed element(s)','2.4.11','Sticky elements may obstruct content for zoom users.','Ensure sticky elements do not obscure content when zoomed.',sticky[0]);
+
+  // Cognitive load
+  var interactive=document.querySelectorAll('a,button,input,select,textarea,[role=button],[role=link],[onclick]');
+  if(interactive.length>60)push('minor','High interactive element count ('+interactive.length+')','3.2.4','Pages with 60+ interactive elements may overwhelm users.','Consider simplifying the page or breaking into sections.',null);
+
+  // 1.4.10 Fixed pixel widths
+  var fixedWidth=Array.from(document.querySelectorAll('*')).slice(0,500).filter(function(el){var s=el.getAttribute('style')||'';return/width\\s*:\\s*\\d{4,}px/.test(s);});
+  if(fixedWidth.length)push('minor',fixedWidth.length+' element(s) with large fixed pixel width','1.4.10','Fixed pixel widths prevent content from reflowing on small screens.','Use relative units (%, vw) instead of fixed pixel widths.',fixedWidth[0]);
+
+  // Score calculation — recalibrated (matches api/scan.js)
+  var critCount=issues.filter(function(i){return i.sev==='critical';}).length;
+  var serCount=issues.filter(function(i){return i.sev==='serious';}).length;
+  var totalChecks=issues.length+passes.length;
+  var passRatio=totalChecks>0?passes.length/totalChecks:0;
+  var rawScore=100-ded+(passRatio*15);
+  if(critCount>=3)rawScore=Math.min(rawScore,30);
+  else if(critCount>=2)rawScore=Math.min(rawScore,45);
+  else if(critCount===1)rawScore=Math.min(rawScore,62);
+  else if(serCount>=3)rawScore=Math.min(rawScore,70);
+  else if(serCount>=1)rawScore=Math.min(rawScore,82);
+  score=Math.max(0,Math.min(issues.length>0?99:100,Math.round(rawScore)));
+
+  // Severity counts
+  var sc={critical:0,serious:0,moderate:0,minor:0};
+  issues.forEach(function(i){sc[i.sev]=(sc[i.sev]||0)+1;});
+
+  // Grade + color
+  var grade,color;
+  if(score>=90){grade='A';color='#16a34a';}
+  else if(score>=70){grade='B';color='#2563eb';}
+  else if(score>=50){grade='C';color='#ca8a04';}
+  else if(score>=30){grade='D';color='#ea580c';}
+  else{grade='F';color='#dc2626';}
+
+  // Build results UI
+  document.getElementById('bp-scanning').style.display='none';
+  var bod=document.getElementById('bp-body');bod.style.display='block';
+  var h='<div id="bp-score-hero">';
+  h+='<div class="bp-ring-wrap"><svg width="100" height="100" viewBox="0 0 100 100"><circle cx="50" cy="50" r="43" stroke="#f1f5f9" stroke-width="8" fill="none"/><circle cx="50" cy="50" r="43" stroke="'+color+'" stroke-width="8" fill="none" stroke-linecap="round" stroke-dasharray="'+Math.round(270*(score/100))+' 270" transform="rotate(-90 50 50)" style="transition:stroke-dasharray 1.2s"/></svg><div class="bp-grade" style="background:'+color+'">'+grade+'</div></div>';
+  h+='<div id="bp-score-label" style="color:'+color+'">'+score+' / 100</div>';
+  h+='<div id="bp-score-url">'+location.hostname+location.pathname.slice(0,40)+'</div>';
+  h+='<div id="bp-score-bar-wrap"><div id="bp-score-bar" style="width:0;background:'+color+'"></div></div>';
+  h+='<div id="bp-score-pct" style="color:'+color+'">'+score+'%</div>';
+  h+='<div class="bp-stats">';
+  h+='<div class="bp-stat"><div class="bp-stat-n" style="color:#dc2626">'+sc.critical+'</div><div class="bp-stat-l">Critical</div></div>';
+  h+='<div class="bp-stat"><div class="bp-stat-n" style="color:#ea580c">'+sc.serious+'</div><div class="bp-stat-l">Serious</div></div>';
+  h+='<div class="bp-stat"><div class="bp-stat-n" style="color:#ca8a04">'+sc.moderate+'</div><div class="bp-stat-l">Moderate</div></div>';
+  h+='<div class="bp-stat"><div class="bp-stat-n" style="color:#16a34a">'+sc.minor+'</div><div class="bp-stat-l">Minor</div></div>';
+  h+='</div>';
+  if(sc.critical>0||sc.serious>0){
+    h+='<div style="margin:12px 20px 0;padding:10px 14px;background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;font-size:11px;color:#991b1b;line-height:1.6">';
+    h+='<b>\\u26A0\\uFE0F ADA & Section 508 Risk:</b> This page has '+(sc.critical+sc.serious)+' critical/serious issues that may expose this site to legal action under ADA Title III and Section 508.';
+    h+='</div>';
+  }
+  h+='</div>';
+  var sevC={critical:{bg:'#fef2f2',text:'#dc2626',border:'#fca5a5'},serious:{bg:'#fff7ed',text:'#ea580c',border:'#fdb896'},moderate:{bg:'#fefce8',text:'#ca8a04',border:'#fde68a'},minor:{bg:'#dcfce7',text:'#16a34a',border:'#86efac'}};
+  if(issues.length){
+    h+='<div class="bp-section">Issues ('+issues.length+')</div>';
+    issues.forEach(function(issue){
+      var s=sevC[issue.sev]||sevC.minor;
+      h+='<div class="bp-issue"><button class="bp-issue-head" onclick="this.nextElementSibling.classList.toggle(\\'open\\')">';
+      h+='<span class="bp-dot" style="background:'+s.text+'"></span>';
+      h+='<span class="bp-chip" style="background:'+s.bg+';color:'+s.text+';border:1px solid '+s.border+'">'+issue.sev+'</span>';
+      h+='<span class="bp-issue-title">'+issue.title+'</span>';
+      h+='<span class="bp-wcag">'+issue.wcag+'</span>';
+      h+='<span class="bp-arr">v</span>';
+      h+='</button><div class="bp-issue-body">';
+      h+='<div class="bp-desc">'+issue.desc+'</div>';
+      if(issue.el)h+='<div class="bp-code">'+issue.el.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>';
+      h+='<div class="bp-fix"><b>Fix:</b> '+issue.fix+'</div>';
+      h+='</div></div>';
+    });
+  }
+  if(imgs.length){
+    h+='<div class="bp-section">Missing Alt Text ('+imgs.length+')</div>';
+    imgs.forEach(function(img){
+      h+='<div class="bp-img-card">';
+      if(img.src)h+='<img class="bp-img-thumb" src="'+img.src+'" alt="" onerror="this.style.display=\\'none\\'">';
+      h+='<div style="flex:1;min-width:0"><div style="font-size:11px;font-weight:700;color:'+(img.missingAlt?'#dc2626':'#ea580c')+'">'+(img.missingAlt?'No alt attribute':'Empty alt')+'</div>';
+      h+='<div class="bp-img-src">'+(img.srcRaw||'(no src)')+'</div></div></div>';
+    });
+  }
+  if(passes.length){
+    h+='<div class="bp-section">Passing ('+passes.length+')</div>';
+    passes.forEach(function(p){h+='<div class="bp-pass"><span>v</span><span style="flex:1">'+p.t+'</span><span style="font-size:10px;color:#16a34a;font-weight:700">'+p.w+'</span></div>';});
+  }
+  bod.innerHTML=h;
+  setTimeout(function(){var bar=document.getElementById('bp-score-bar');if(bar)bar.style.width=score+'%';},100);
+}
+runScan();
+})();`;
+
+  // URL-encode and set as href
+  var encoded = 'javascript:' + encodeURIComponent(bmCode);
+  document.getElementById('bm').href = encoded;
+})();
+</script>
+</body>
+</html>
