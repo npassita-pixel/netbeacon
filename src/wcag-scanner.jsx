@@ -49,13 +49,13 @@ function runLocalScan(doc, baseUrl) {
     return raw;
   }
 
-  function push(sev, title, wcag, desc, fix, el) {
+  function push(sev, title, wcag, desc, fix, el, extraImgSrcs) {
     const principleMap = {
       "1":  "Perceivable", "2": "Operable", "3": "Understandable", "4": "Robust"
     };
     const principle = principleMap[wcag?.split(".")[0]] || "Robust";
     const imgSrc = resolveImgSrc(el);
-    issues.push({ severity: sev, title, wcag, principle, description: desc, fix, element: el?.outerHTML?.slice(0,200) || null, imgSrc });
+    issues.push({ severity: sev, title, wcag, principle, description: desc, fix, element: el?.outerHTML?.slice(0,200) || null, imgSrc, imgSrcs: extraImgSrcs || [] });
   }
   function pass(t, w) { passes.push({ title: t, wcag: w }); }
 
@@ -106,9 +106,9 @@ function runLocalScan(doc, baseUrl) {
       if (!img.hasAttribute("alt")) miss.push(img);
       else if (img.getAttribute("alt").trim() === "") decorative.push(img);
     });
-    if (miss.length) { ded += miss.length <= 2 ? 4 : miss.length <= 5 ? 7 : 10; push("critical", `Images missing alt text (${miss.length})`, "1.1.1", "Images with no alt attribute are invisible to screen readers.", 'Add alt="description". Use alt="" only for truly decorative images.', miss[0]); }
+    if (miss.length) { ded += miss.length <= 2 ? 4 : miss.length <= 5 ? 7 : 10; const missSrcs = miss.map(m => resolveImgSrc(m)); push("critical", `Images missing alt text (${miss.length})`, "1.1.1", "Images with no alt attribute are invisible to screen readers.", 'Add alt="description". Use alt="" only for truly decorative images.', miss[0], missSrcs); }
     else pass("All images have alt text", "1.1.1");
-    if (decorative.length) push("minor", `${decorative.length} image(s) with empty alt — verify decorative`, "1.1.1", "Images with alt=\"\" are treated as decorative. Confirm these add no meaning.", "If image conveys information, add a descriptive alt attribute.", decorative[0]);
+    if (decorative.length) { const decoSrcs = decorative.map(m => resolveImgSrc(m)); push("minor", `${decorative.length} image(s) with empty alt — verify decorative`, "1.1.1", "Images with alt=\"\" are treated as decorative. Confirm these add no meaning.", "If image conveys information, add a descriptive alt attribute.", decorative[0], decoSrcs); }
   } catch(e) {}
 
   // 1.3.1 Headings
@@ -547,7 +547,14 @@ function IssueRow({ issue }) {
       {open && (
         <div style={{ padding:"0 17px 17px", borderTop:`1px solid ${C.border}`, background:"#FAFBFD" }}>
           <p style={{ color:C.textSub, fontSize:13, margin:"13px 0 10px", lineHeight:1.7 }}>{issue.description}</p>
-          {issue.imgSrc ? (
+          {issue.imgSrcs && issue.imgSrcs.length > 0 ? (
+            <>
+              <div style={{ display:"flex", flexWrap:"wrap", gap:8, margin:"9px 0" }}>
+                {issue.imgSrcs.map((src, idx) => src ? <img key={idx} src={src} alt="" style={{ width:60, height:60, borderRadius:8, objectFit:"cover", background:C.bg, border:`1px solid ${C.border}`, flexShrink:0 }} onError={e=>{e.target.onerror=null;e.target.style.display="none";}}/> : null)}
+              </div>
+              {issue.element && <pre style={{ background:"#0D1421", color:"#7DD3FC", padding:"11px 15px", borderRadius:8, fontSize:11, overflowX:"auto", margin:"0 0 9px", fontFamily:"'JetBrains Mono','Fira Code',monospace", whiteSpace:"pre-wrap", wordBreak:"break-all", lineHeight:1.6 }}>{issue.element}</pre>}
+            </>
+          ) : issue.imgSrc ? (
             <div style={{ display:"flex", gap:10, alignItems:"flex-start", margin:"9px 0" }}>
               <img src={issue.imgSrc} alt="" style={{ width:60, height:60, borderRadius:8, objectFit:"cover", background:C.bg, border:`1px solid ${C.border}`, flexShrink:0 }} onError={e=>{e.target.onerror=null;e.target.style.display="none";e.target.nextElementSibling.style.display="flex";}}/><div style={{ display:"none", width:60, height:60, borderRadius:8, background:C.bg, border:`1px solid ${C.border}`, alignItems:"center", justifyContent:"center", fontSize:20, color:C.textMuted, flexShrink:0 }}>✕</div>
               <div style={{ flex:1, minWidth:0 }}>
@@ -1002,12 +1009,8 @@ Respond ONLY with valid JSON. No markdown, no code fences, no preamble. Pure JSO
         // AI unavailable but headless scan succeeded — use headless results directly
         setProgress("AI unavailable — using automated scan results…");
         const sevMap = { critical: "Perceivable", serious: "Operable", moderate: "Understandable", minor: "Robust" };
-        parsed = {
-          score: headlessData.score,
-          summary: `Automated scan completed. ${headlessData.issues?.length || 0} issue(s) found. AI analysis was unavailable — results are from automated WCAG checks only.`,
-          level: headlessData.score >= 90 ? "AA" : headlessData.score >= 50 ? "Partial" : "Non-Compliant",
-          adaRisk: headlessData.score >= 90 ? "Low" : headlessData.score >= 70 ? "Medium" : headlessData.score >= 40 ? "High" : "Critical",
-          issues: (headlessData.issues || []).map(i => ({
+        const sevOrder = { critical:0, serious:1, moderate:2, minor:3 };
+        const mappedIssues = (headlessData.issues || []).map(i => ({
             title: i.title,
             severity: i.sev,
             wcag: i.wcag,
@@ -1015,8 +1018,15 @@ Respond ONLY with valid JSON. No markdown, no code fences, no preamble. Pure JSO
             description: i.detail,
             element: i.snippet || null,
             imgSrc: i.imgSrc || "",
+            imgSrcs: i.imgSrcs || [],
             fix: `Address WCAG ${i.wcag} — ${i.title}`
-          })),
+          })).sort((a,b) => (sevOrder[a.severity]||3) - (sevOrder[b.severity]||3));
+        parsed = {
+          score: headlessData.score,
+          summary: `Automated scan completed. ${headlessData.issues?.length || 0} issue(s) found. AI analysis was unavailable — results are from automated WCAG checks only.`,
+          level: headlessData.score >= 90 ? "AA" : headlessData.score >= 50 ? "Partial" : "Non-Compliant",
+          adaRisk: headlessData.score >= 90 ? "Low" : headlessData.score >= 70 ? "Medium" : headlessData.score >= 40 ? "High" : "Critical",
+          issues: mappedIssues,
           passes: headlessData.passes || [],
           stats: {
             critical: (headlessData.issues || []).filter(i => i.sev === "critical").length,
@@ -1050,7 +1060,9 @@ Respond ONLY with valid JSON. No markdown, no code fences, no preamble. Pure JSO
         // Validate required fields
         if (!parsed.score && parsed.score !== 0) parsed.score = headlessData?.score || 50;
         if (!parsed.issues) parsed.issues = [];
-        parsed.issues = parsed.issues.map(i => ({ ...i, imgSrc: i.imgSrc || "" }));
+        parsed.issues = parsed.issues.map(i => ({ ...i, imgSrc: i.imgSrc || "", imgSrcs: i.imgSrcs || [] }));
+        const sevOrd = { critical:0, serious:1, moderate:2, minor:3 };
+        parsed.issues.sort((a,b) => (sevOrd[a.severity]||3) - (sevOrd[b.severity]||3));
         if (!parsed.passes) parsed.passes = [];
         if (!parsed.stats) parsed.stats = { critical:0, serious:0, moderate:0, minor:0 };
 

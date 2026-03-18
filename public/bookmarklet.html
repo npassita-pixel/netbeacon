@@ -265,12 +265,16 @@ ov.onclick=function(){pan.style.display='none';ov.style.display='none';};
 
 function runScan(){
   var ded=0;
-  function push(sev,title,wcag,desc,fix,el){
+  var beaconPanel=document.getElementById('beacon-panel');
+  var beaconOverlay=document.getElementById('beacon-overlay');
+  function isBeaconEl(el){if(!el)return false;if(beaconPanel&&beaconPanel.contains(el))return true;if(beaconOverlay&&el===beaconOverlay)return true;return false;}
+  function qsa(sel){return Array.from(document.querySelectorAll(sel)).filter(function(el){return!isBeaconEl(el);});}
+  function push(sev,title,wcag,desc,fix,el,extraImgSrcs){
     var snippet='';
     var imgSrc='';
     if(el){try{snippet=el.outerHTML?el.outerHTML.slice(0,120):'';}catch(e){}}
     if(el&&el.tagName==='IMG'){try{imgSrc=el.src||'';}catch(e){}}
-    issues.push({sev:sev,title:title,wcag:wcag,desc:desc,fix:fix,el:snippet,imgSrc:imgSrc});
+    issues.push({sev:sev,title:title,wcag:wcag,desc:desc,fix:fix,el:snippet,imgSrc:imgSrc,imgSrcs:extraImgSrcs||[]});
   }
   function pass(t,w){passes.push({t:t,w:w});}
 
@@ -285,36 +289,37 @@ function runScan(){
   var allImgs=document.querySelectorAll('img');
   var miss=[],decoImgs=[];
   Array.from(allImgs).forEach(function(img){
+    if(isBeaconEl(img))return;
     if(isTrackingPixel(img))return;
     var role=img.getAttribute('role');
     if(role==='presentation'||role==='none')return;
     if(!img.hasAttribute('alt')){miss.push(img);imgs.push({src:img.src,srcRaw:(img.getAttribute('src')||'').slice(0,80),missingAlt:true});}
     else if(img.getAttribute('alt').trim()===''){decoImgs.push(img);imgs.push({src:img.src,srcRaw:(img.getAttribute('src')||'').slice(0,80),missingAlt:false});}
   });
-  if(miss.length){ded+=miss.length<=2?4:miss.length<=5?7:10;push('critical','Images missing alt text ('+miss.length+')','1.1.1','Images with no alt attribute are invisible to screen readers.','Add descriptive alt text to each image, or alt="" for decorative images.',miss[0]);}
+  if(miss.length){ded+=miss.length<=2?4:miss.length<=5?7:10;var missSrcs=miss.map(function(m){try{return m.src||'';}catch(e){return'';}});push('critical','Images missing alt text ('+miss.length+')','1.1.1','Images with no alt attribute are invisible to screen readers.','Add descriptive alt text to each image, or alt="" for decorative images.',miss[0],missSrcs);}
   else pass('Alt text present on all images','1.1.1');
-  if(decoImgs.length)push('minor',decoImgs.length+' image(s) with empty alt \\u2014 verify decorative','1.1.1','Images with alt="" are treated as decorative. Confirm they add no meaning.','If the image conveys information, add descriptive alt text.',decoImgs[0]);
+  if(decoImgs.length){var decoSrcs=decoImgs.map(function(m){try{return m.src||'';}catch(e){return'';}});push('minor',decoImgs.length+' image(s) with empty alt \\u2014 verify decorative','1.1.1','Images with alt="" are treated as decorative. Confirm they add no meaning.','If the image conveys information, add descriptive alt text.',decoImgs[0],decoSrcs);}
 
   // 1.2.2 Video captions
-  var videos=document.querySelectorAll('video');
-  var noCaptions=Array.from(videos).filter(function(v){return!v.querySelector('track[kind=captions]');});
+  var videos=qsa('video');
+  var noCaptions=videos.filter(function(v){return!v.querySelector('track[kind=captions]');});
   if(noCaptions.length){ded+=6;push('serious',noCaptions.length+' video(s) without captions','1.2.2','Videos must have synchronized captions.','Add <track kind="captions"> to each video element.',noCaptions[0]);}
 
   // 1.3.1 Heading structure
-  var h1s=document.querySelectorAll('h1');
+  var h1s=qsa('h1');
   if(h1s.length===0){ded+=4;push('serious','Missing H1 heading','1.3.1','Page has no H1. Screen readers use H1 as the main landmark.','Add a single H1 heading that describes the page content.',null);}
   else if(h1s.length>1){ded+=2;push('moderate','Multiple H1 headings ('+h1s.length+')','1.3.1','Only one H1 per page is recommended.','Keep one H1 and demote others to H2 or lower.',h1s[1]);}
   else pass('Single H1 present','1.3.1');
 
   // Heading skip
-  var hLevels=Array.from(document.querySelectorAll('h1,h2,h3,h4,h5,h6')).map(function(h){return parseInt(h.tagName[1]);});
+  var hLevels=qsa('h1,h2,h3,h4,h5,h6').map(function(h){return parseInt(h.tagName[1]);});
   var skipped=false;
   for(var i=1;i<hLevels.length;i++){if(hLevels[i]-hLevels[i-1]>1){skipped=true;break;}}
   if(skipped){ded+=3;push('moderate','Heading levels skipped','1.3.1','Heading levels jump (e.g. H2 to H4). Screen reader users lose navigation context.','Use sequential heading levels without skipping.',null);}
   else pass('Heading hierarchy is sequential','1.3.1');
 
   // 1.3.1 Unlabeled inputs
-  var inputs=Array.from(document.querySelectorAll('input,select,textarea')).filter(function(inp){
+  var inputs=qsa('input,select,textarea').filter(function(inp){
     if(inp.type==='hidden'||inp.type==='submit'||inp.type==='button'||inp.type==='reset')return false;
     var id=inp.id;
     var hasLabel=id&&document.querySelector('label[for="'+id+'"]');
@@ -327,7 +332,7 @@ function runScan(){
   else pass('All form inputs have labels','1.3.1');
 
   // 1.4.1 Color only
-  var colorLinks=Array.from(document.querySelectorAll('a')).filter(function(a){
+  var colorLinks=qsa('a').filter(function(a){
     var s=window.getComputedStyle(a);
     return s.textDecoration.indexOf('underline')===-1&&s.fontWeight<700;
   });
@@ -335,7 +340,7 @@ function runScan(){
   else pass('Links are visually distinguishable','1.4.1');
 
   // 1.4.2 Autoplay audio
-  var autoAudio=document.querySelectorAll('audio[autoplay],video[autoplay]');
+  var autoAudio=qsa('audio[autoplay],video[autoplay]');
   if(autoAudio.length){ded+=5;push('serious','Autoplaying media found','1.4.2','Media should not autoplay \\u2014 distracting for screen reader users.','Remove autoplay or provide controls to stop.',autoAudio[0]);}
   else pass('No autoplaying media','1.4.2');
 
@@ -344,7 +349,7 @@ function runScan(){
   function getLuminance(r,g,b){var a=[r,g,b].map(function(v){v/=255;return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4);});return a[0]*0.2126+a[1]*0.7152+a[2]*0.0722;}
   function parseColor(c){var m=c.match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)/);return m?[parseInt(m[1]),parseInt(m[2]),parseInt(m[3])]:null;}
   function effectiveBg(el){var node=el;while(node&&node!==document.body.parentElement){var cs=window.getComputedStyle(node);var bg=parseColor(cs.backgroundColor);if(bg&&cs.backgroundColor!=='transparent'&&cs.backgroundColor!=='rgba(0, 0, 0, 0)')return bg;node=node.parentElement;}return[255,255,255];}
-  var textEls=Array.from(document.querySelectorAll('p,span,a,li,td,th,label,button,h1,h2,h3,h4,h5,h6')).filter(function(el){var cs=window.getComputedStyle(el);return cs.display!=='none'&&cs.visibility!=='hidden';}).slice(0,80);
+  var textEls=qsa('p,span,a,li,td,th,label,button,h1,h2,h3,h4,h5,h6').filter(function(el){var cs=window.getComputedStyle(el);return cs.display!=='none'&&cs.visibility!=='hidden';}).slice(0,80);
   textEls.forEach(function(el){
     var cs=window.getComputedStyle(el);
     var fg=parseColor(cs.color);if(!fg)return;
@@ -375,19 +380,18 @@ function runScan(){
   else pass('Landmarks present','1.3.6');
 
   // 2.1.1 Positive tabindex
-  var posTabs=document.querySelectorAll('[tabindex]');
-  var badTabs=Array.from(posTabs).filter(function(el){return parseInt(el.getAttribute('tabindex'))>0;});
+  var badTabs=qsa('[tabindex]').filter(function(el){return parseInt(el.getAttribute('tabindex'))>0;});
   if(badTabs.length){ded+=3;push('moderate','Positive tabindex values found ('+badTabs.length+')','2.1.1','tabindex > 0 disrupts natural focus order.','Remove positive tabindex values; use DOM order instead.',badTabs[0]);}
   else pass('No positive tabindex values','2.1.1');
 
   // Negative tabindex on interactive
-  var negTabs=Array.from(document.querySelectorAll('a[href][tabindex="-1"],button[tabindex="-1"]'));
+  var negTabs=qsa('a[href][tabindex="-1"],button[tabindex="-1"]');
   if(negTabs.length){ded+=3;push('moderate','Interactive elements removed from tab order ('+negTabs.length+')','2.1.1','tabindex=-1 makes elements unreachable by keyboard.','Remove tabindex=-1 from interactive elements.',negTabs[0]);}
 
   // 2.3.3 Reduced motion
   var hasMotionQuery=false;
   try{Array.from(document.styleSheets).forEach(function(sheet){try{Array.from(sheet.cssRules||[]).forEach(function(rule){if(rule.conditionText&&rule.conditionText.includes('prefers-reduced-motion'))hasMotionQuery=true;});}catch(e){}});}catch(e){}
-  var hasAnimations=Array.from(document.querySelectorAll('*')).slice(0,200).some(function(el){try{var s=window.getComputedStyle(el);return s.animationName!=='none';}catch(e){return false;}});
+  var hasAnimations=qsa('*').slice(0,200).some(function(el){try{var s=window.getComputedStyle(el);return s.animationName!=='none';}catch(e){return false;}});
   if(hasAnimations&&!hasMotionQuery){ded+=3;push('moderate','No prefers-reduced-motion media query','2.3.3','Animations should respect user motion preferences (WCAG 2.2).','Add @media (prefers-reduced-motion: reduce) to disable animations.',null);}
   else if(hasMotionQuery)pass('prefers-reduced-motion supported','2.3.3');
 
@@ -403,12 +407,12 @@ function runScan(){
 
   // 2.4.4 Vague link text
   var vague=['click here','here','read more','more','learn more','link','this','continue'];
-  var vagueLinks=Array.from(document.querySelectorAll('a')).filter(function(a){return vague.indexOf(a.textContent.trim().toLowerCase())!==-1;});
+  var vagueLinks=qsa('a').filter(function(a){return vague.indexOf(a.textContent.trim().toLowerCase())!==-1;});
   if(vagueLinks.length){ded+=vagueLinks.length<=3?3:5;push('moderate',vagueLinks.length+' vague link(s) found','2.4.4','Link text like "click here" is meaningless out of context.','Use descriptive link text that makes sense on its own.',vagueLinks[0]);}
   else pass('Link text is descriptive','2.4.4');
 
   // 2.4.4 Empty links
-  var emptyLinks=Array.from(document.querySelectorAll('a')).filter(function(a){
+  var emptyLinks=qsa('a').filter(function(a){
     var txt=(a.textContent||'').trim();
     var aria=a.getAttribute('aria-label');
     var hasImg=a.querySelector('img[alt]:not([alt=""])');
@@ -417,18 +421,18 @@ function runScan(){
   if(emptyLinks.length){ded+=emptyLinks.length<=2?3:5;push('serious','Empty links ('+emptyLinks.length+')','2.4.4','Links with no text are meaningless to screen readers.','Add visible text or aria-label to each link.',emptyLinks[0]);}
 
   // 2.4.4 target=_blank without warning
-  var blankLinks=Array.from(document.querySelectorAll('a[target="_blank"]')).filter(function(a){
+  var blankLinks=qsa('a[target="_blank"]').filter(function(a){
     return!(a.getAttribute('aria-label')||'').includes('new')&&!(a.textContent||'').includes('new window');
   });
   if(blankLinks.length>2){ded+=2;push('minor',blankLinks.length+' links open new tab without warning','2.4.4','Users should be warned when links open in a new tab.','Add aria-label or text indicating "opens in new tab".',blankLinks[0]);}
 
   // 2.4.6 Empty headings
-  var emptyH=Array.from(document.querySelectorAll('h1,h2,h3,h4,h5,h6')).filter(function(h){return h.textContent.trim().length===0;});
+  var emptyH=qsa('h1,h2,h3,h4,h5,h6').filter(function(h){return h.textContent.trim().length===0;});
   if(emptyH.length){ded+=3;push('moderate',emptyH.length+' empty heading(s)','2.4.6','Empty headings confuse screen reader navigation.','Remove empty headings or add text content.',emptyH[0]);}
   else pass('No empty headings','2.4.6');
 
   // 2.4.11 Focus indicators
-  var focusEls=Array.from(document.querySelectorAll('a,button,[tabindex="0"]')).slice(0,30);
+  var focusEls=qsa('a,button,[tabindex="0"]').slice(0,30);
   var hiddenFocus=focusEls.filter(function(el){
     try{var cs=window.getComputedStyle(el);var ow=parseFloat(cs.outlineWidth);var os=cs.outlineStyle;var shadow=cs.boxShadow;return(ow===0||os==='none')&&(!shadow||shadow==='none');}catch(e){return false;}
   });
@@ -436,7 +440,7 @@ function runScan(){
   else pass('Focus indicators appear visible','2.4.11');
 
   // 2.5.3 ARIA label mismatch
-  var mismatch=Array.from(document.querySelectorAll('[aria-label]')).filter(function(el){
+  var mismatch=qsa('[aria-label]').filter(function(el){
     var label=(el.getAttribute('aria-label')||'').toLowerCase().trim();
     var text=(el.textContent||'').toLowerCase().trim();
     return text.length>2&&label.length>2&&!label.includes(text.slice(0,8))&&!text.includes(label.slice(0,8));
@@ -445,7 +449,7 @@ function runScan(){
   else pass('Accessible names match visible text','2.5.3');
 
   // 2.5.8 Touch targets
-  var smallTargets=Array.from(document.querySelectorAll('a,button,[role=button],[role=link]')).filter(function(el){var r=el.getBoundingClientRect();return r.width>0&&r.height>0&&(r.width<24||r.height<24);});
+  var smallTargets=qsa('a,button,[role=button],[role=link]').filter(function(el){var r=el.getBoundingClientRect();return r.width>0&&r.height>0&&(r.width<24||r.height<24);});
   if(smallTargets.length){ded+=smallTargets.length<=3?3:5;push('moderate',smallTargets.length+' small touch target(s)','2.5.8','Interactive elements should be at least 24x24px (WCAG 2.2).','Increase padding or min-width/min-height to 24px.',smallTargets[0]);}
   else pass('Touch targets meet minimum size','2.5.8');
 
@@ -455,45 +459,45 @@ function runScan(){
   else pass('Page language set: '+lang,'3.1.1');
 
   // 3.3.2 Required fields
-  var reqInputs=Array.from(document.querySelectorAll('[required],[aria-required=true]'));
+  var reqInputs=qsa('[required],[aria-required=true]');
   var unlabeledReq=reqInputs.filter(function(inp){return!inp.getAttribute('aria-label')&&!inp.getAttribute('aria-labelledby')&&!(inp.id&&document.querySelector('label[for="'+inp.id+'"]'));});
   if(unlabeledReq.length){ded+=3;push('moderate',unlabeledReq.length+' required field(s) not labeled','3.3.2','Required fields must be clearly labeled and indicated.','Add labels and aria-required to required fields.',unlabeledReq[0]);}
   else if(reqInputs.length)pass('Required fields are labeled','3.3.2');
 
   // 4.1.1 Duplicate IDs
-  var allIds=Array.from(document.querySelectorAll('[id]')).map(function(e){return e.id;}).filter(Boolean);
+  var allIds=qsa('[id]').map(function(e){return e.id;}).filter(Boolean);
   var idCounts={};allIds.forEach(function(id){idCounts[id]=(idCounts[id]||0)+1;});
   var dupIds=Object.keys(idCounts).filter(function(id){return idCounts[id]>1;});
   if(dupIds.length){ded+=dupIds.length<=2?3:5;push('serious','Duplicate IDs ('+dupIds.length+')','4.1.1','Duplicate IDs break label associations and ARIA references.','Give each element a unique ID.',null);}
   else pass('No duplicate IDs','4.1.1');
 
   // 4.1.1 Invalid ARIA
-  var ariaEls=document.querySelectorAll('[role]');
+  var ariaEls=qsa('[role]');
   var validRoles=['alert','alertdialog','application','article','banner','button','cell','checkbox','columnheader','combobox','complementary','contentinfo','definition','dialog','directory','document','feed','figure','form','grid','gridcell','group','heading','img','link','list','listbox','listitem','log','main','marquee','math','menu','menubar','menuitem','menuitemcheckbox','menuitemradio','navigation','none','note','option','presentation','progressbar','radio','radiogroup','region','row','rowgroup','rowheader','scrollbar','search','searchbox','separator','slider','spinbutton','status','switch','tab','table','tablist','tabpanel','term','textbox','timer','toolbar','tooltip','tree','treegrid','treeitem'];
-  var badRoles=Array.from(ariaEls).filter(function(el){return validRoles.indexOf(el.getAttribute('role'))===-1;});
+  var badRoles=ariaEls.filter(function(el){return validRoles.indexOf(el.getAttribute('role'))===-1;});
   if(badRoles.length){ded+=4;push('serious','Invalid ARIA role(s) found ('+badRoles.length+')','4.1.1','Invalid roles are ignored by assistive technologies.','Use only valid WAI-ARIA roles.',badRoles[0]);}
   else pass('All ARIA roles are valid','4.1.1');
 
   // 4.1.2 ARIA widget props
-  var ariaFails=Array.from(document.querySelectorAll("[role='switch'],[role='checkbox'],[role='radio']")).filter(function(el){return!el.hasAttribute('aria-checked');}).slice(0,5);
+  var ariaFails=qsa("[role='switch'],[role='checkbox'],[role='radio']").filter(function(el){return!el.hasAttribute('aria-checked');}).slice(0,5);
   if(ariaFails.length){ded+=5;push('serious','ARIA widgets missing required properties ('+ariaFails.length+')','4.1.2','Custom ARIA widgets need required state properties.','Add aria-checked to switch/checkbox/radio widgets.',ariaFails[0]);}
 
   // 4.1.2 Unnamed buttons
-  var unnamedBtns=Array.from(document.querySelectorAll('button,[role=button]')).filter(function(el){
+  var unnamedBtns=qsa('button,[role=button]').filter(function(el){
     return!el.textContent.trim()&&!el.getAttribute('aria-label')&&!el.getAttribute('aria-labelledby')&&!el.getAttribute('title');
   });
   if(unnamedBtns.length){ded+=unnamedBtns.length<=2?5:8;push('critical',unnamedBtns.length+' unnamed button(s)','4.1.2','Buttons must have accessible names for screen readers.','Add text, aria-label, or title to each button.',unnamedBtns[0]);}
   else pass('All buttons have accessible names','4.1.2');
 
   // 4.1.2 Unnamed iframes
-  var iframes=document.querySelectorAll('iframe');
-  var badIframes=Array.from(iframes).filter(function(f){return!f.getAttribute('title')&&!f.getAttribute('aria-label');});
+  var iframes=qsa('iframe');
+  var badIframes=iframes.filter(function(f){return!f.getAttribute('title')&&!f.getAttribute('aria-label');});
   if(badIframes.length){ded+=4;push('serious',badIframes.length+' iframe(s) missing title','4.1.2','Iframes must have a title attribute describing their content.','Add a descriptive title attribute to each iframe.',badIframes[0]);}
   else if(iframes.length)pass('All iframes have titles','4.1.2');
 
   // SVG accessible names
   var badSvg=[];
-  document.querySelectorAll('svg').forEach(function(svg){
+  qsa('svg').forEach(function(svg){
     if(svg.getAttribute('aria-hidden')==='true'||svg.getAttribute('role')==='presentation')return;
     try{var cs=window.getComputedStyle(svg);if(cs.display==='none'||cs.visibility==='hidden')return;}catch(e){}
     var anc=svg.parentElement;while(anc){if(anc.getAttribute&&anc.getAttribute('aria-hidden')==='true')return;anc=anc.parentElement;}
@@ -507,15 +511,15 @@ function runScan(){
   else pass('SVGs have accessible names or are decorative','4.1.2');
 
   // Sticky elements
-  var sticky=Array.from(document.querySelectorAll('*')).slice(0,500).filter(function(el){try{var p=window.getComputedStyle(el).position;return p==='sticky'||p==='fixed';}catch(e){return false;}});
+  var sticky=qsa('*').slice(0,500).filter(function(el){try{var p=window.getComputedStyle(el).position;return p==='sticky'||p==='fixed';}catch(e){return false;}});
   if(sticky.length>2)push('minor',sticky.length+' sticky/fixed element(s)','2.4.11','Sticky elements may obstruct content for zoom users.','Ensure sticky elements do not obscure content when zoomed.',sticky[0]);
 
   // Cognitive load
-  var interactive=document.querySelectorAll('a,button,input,select,textarea,[role=button],[role=link],[onclick]');
+  var interactive=qsa('a,button,input,select,textarea,[role=button],[role=link],[onclick]');
   if(interactive.length>60)push('minor','High interactive element count ('+interactive.length+')','3.2.4','Pages with 60+ interactive elements may overwhelm users.','Consider simplifying the page or breaking into sections.',null);
 
   // 1.4.10 Fixed pixel widths
-  var fixedWidth=Array.from(document.querySelectorAll('*')).slice(0,500).filter(function(el){var s=el.getAttribute('style')||'';return/width\\s*:\\s*\\d{4,}px/.test(s);});
+  var fixedWidth=qsa('*').slice(0,500).filter(function(el){var s=el.getAttribute('style')||'';return/width\\s*:\\s*\\d{4,}px/.test(s);});
   if(fixedWidth.length)push('minor',fixedWidth.length+' element(s) with large fixed pixel width','1.4.10','Fixed pixel widths prevent content from reflowing on small screens.','Use relative units (%, vw) instead of fixed pixel widths.',fixedWidth[0]);
 
   // Score calculation — recalibrated (matches api/scan.js)
@@ -565,6 +569,10 @@ function runScan(){
   }
   h+='</div>';
   var sevC={critical:{bg:'#fef2f2',text:'#dc2626',border:'#fca5a5'},serious:{bg:'#fff7ed',text:'#ea580c',border:'#fdb896'},moderate:{bg:'#fefce8',text:'#ca8a04',border:'#fde68a'},minor:{bg:'#dcfce7',text:'#16a34a',border:'#86efac'}};
+  // Sort issues by severity: critical first, then serious, moderate, minor
+  var sevOrder={critical:0,serious:1,moderate:2,minor:3};
+  issues.sort(function(a,b){return(sevOrder[a.sev]||3)-(sevOrder[b.sev]||3);});
+
   if(issues.length){
     h+='<div class="bp-section">Issues ('+issues.length+')</div>';
     issues.forEach(function(issue){
@@ -577,7 +585,14 @@ function runScan(){
       h+='<span class="bp-arr">v</span>';
       h+='</button><div class="bp-issue-body">';
       h+='<div class="bp-desc">'+issue.desc+'</div>';
-      if(issue.imgSrc){
+      if(issue.imgSrcs&&issue.imgSrcs.length>0){
+        h+='<div style="display:flex;flex-wrap:wrap;gap:8px;margin:8px 0">';
+        issue.imgSrcs.forEach(function(src){
+          if(src)h+='<img class="bp-img-preview" src="'+src.replace(/"/g,'&quot;')+'" alt="" onerror="this.style.display=\\'none\\'">';
+        });
+        h+='</div>';
+        if(issue.el)h+='<div class="bp-code">'+issue.el.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>';
+      } else if(issue.imgSrc){
         h+='<div class="bp-img-preview-wrap"><img class="bp-img-preview" src="'+issue.imgSrc.replace(/"/g,'&quot;')+'" alt="" onerror="this.style.display=\\'none\\';this.nextElementSibling.style.display=\\'flex\\'"><div class="bp-img-fallback" style="display:none">\\u2716</div><div style="flex:1;min-width:0">';
         if(issue.el)h+='<div class="bp-code" style="margin-top:0">'+issue.el.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>';
         h+='</div></div>';

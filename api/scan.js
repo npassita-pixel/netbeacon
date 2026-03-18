@@ -332,7 +332,30 @@ const SCANNER_SCRIPT = `
   else if (serCount  >= 1) rawScore = Math.min(rawScore, 82);
   var score = Math.max(0, Math.min(issues.length > 0 ? 99 : 100, Math.round(rawScore)));
 
-  return { issues: issues, passes: passes, score: score };
+  // Image counting for frontend display
+  var allImgs = document.querySelectorAll('img');
+  var totalImages = 0;
+  var missingAltImages = [];
+  Array.from(allImgs).forEach(function(img) {
+    var s = img.getAttribute('src') || '';
+    var w = img.getAttribute('width'), h = img.getAttribute('height');
+    if ((w === '1' || w === 1) && (h === '1' || h === 1)) return;
+    if (['/pixel/','/track/','/beacon','/collect','adsct','bat.bing','trkn.us','arttrk.','adxcel','bidr.io'].some(function(p){return s.includes(p);})) return;
+    var role = img.getAttribute('role');
+    if (role === 'presentation' || role === 'none') return;
+    totalImages++;
+    if (!img.hasAttribute('alt') || img.getAttribute('alt').trim() === '') {
+      missingAltImages.push({
+        index: missingAltImages.length + 1,
+        src: img.src || '',
+        srcRaw: (img.getAttribute('src') || '').slice(0, 80),
+        missingAlt: !img.hasAttribute('alt'),
+        snippet: img.outerHTML ? img.outerHTML.slice(0, 250) : ''
+      });
+    }
+  });
+
+  return { issues: issues, passes: passes, score: score, images: { total: totalImages, missing: missingAltImages } };
 })();
 `;
 
