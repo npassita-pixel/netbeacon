@@ -578,7 +578,7 @@ function runScan(){
       h+='</button><div class="bp-issue-body">';
       h+='<div class="bp-desc">'+issue.desc+'</div>';
       if(issue.imgSrc){
-        h+='<div class="bp-img-preview-wrap"><img class="bp-img-preview" src="'+issue.imgSrc+'" alt="" onerror="this.outerHTML=\\'<div class=bp-img-fallback>\\u{1F5BC}</div>\\'"><div style="flex:1;min-width:0">';
+        h+='<div class="bp-img-preview-wrap"><img class="bp-img-preview" src="'+issue.imgSrc.replace(/"/g,'&quot;')+'" alt="" onerror="this.style.display=\\'none\\';this.nextElementSibling.style.display=\\'flex\\'"><div class="bp-img-fallback" style="display:none">\\u2716</div><div style="flex:1;min-width:0">';
         if(issue.el)h+='<div class="bp-code" style="margin-top:0">'+issue.el.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>';
         h+='</div></div>';
       } else if(issue.el){
@@ -592,7 +592,7 @@ function runScan(){
     h+='<div class="bp-section">Missing Alt Text ('+imgs.length+')</div>';
     imgs.forEach(function(img){
       h+='<div class="bp-img-card">';
-      if(img.src)h+='<img class="bp-img-thumb" src="'+img.src+'" alt="" onerror="this.style.display=\\'none\\'">';
+      if(img.src)h+='<img class="bp-img-thumb" src="'+img.src.replace(/"/g,'&quot;')+'" alt="" onerror="this.style.display=\\'none\\'">';
       h+='<div style="flex:1;min-width:0"><div style="font-size:11px;font-weight:700;color:'+(img.missingAlt?'#dc2626':'#ea580c')+'">'+(img.missingAlt?'No alt attribute':'Empty alt')+'</div>';
       h+='<div class="bp-img-src">'+(img.srcRaw||'(no src)')+'</div></div></div>';
     });

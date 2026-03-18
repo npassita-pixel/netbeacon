@@ -13,10 +13,12 @@ const SCANNER_SCRIPT = `
 
   function push(id, sev, wcag, title, detail, el) {
     var snippet = '';
+    var imgSrc = '';
     if (el) {
       try { snippet = el.outerHTML ? el.outerHTML.slice(0,120) : ''; } catch(e) {}
+      if (el.tagName === 'IMG') { try { imgSrc = el.src || ''; } catch(e) {} }
     }
-    issues.push({ id: id, sev: sev, wcag: wcag, title: title, detail: detail, snippet: snippet });
+    issues.push({ id: id, sev: sev, wcag: wcag, title: title, detail: detail, snippet: snippet, imgSrc: imgSrc });
   }
   function pass(id, title) { passes.push({ id: id, title: title }); }
 

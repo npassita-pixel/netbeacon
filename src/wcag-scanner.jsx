@@ -36,16 +36,25 @@ const SEV = {
 const PRINCIPLES = ["Perceivable","Operable","Understandable","Robust"];
 
 /* ─── SCAN ENGINE (mirrors bookmarklet logic) ──────────────── */
-function runLocalScan(doc) {
+function runLocalScan(doc, baseUrl) {
   const issues = [], passes = [];
   let ded = 0;
+
+  function resolveImgSrc(el) {
+    if (!el || el.tagName !== "IMG") return "";
+    const raw = el.getAttribute("src") || "";
+    if (!raw) return "";
+    if (/^https?:\/\//.test(raw) || /^data:/.test(raw)) return raw;
+    if (baseUrl) { try { return new URL(raw, baseUrl).href; } catch {} }
+    return raw;
+  }
 
   function push(sev, title, wcag, desc, fix, el) {
     const principleMap = {
       "1":  "Perceivable", "2": "Operable", "3": "Understandable", "4": "Robust"
     };
     const principle = principleMap[wcag?.split(".")[0]] || "Robust";
-    const imgSrc = (el?.tagName === "IMG") ? (el.src || el.getAttribute("src") || "") : "";
+    const imgSrc = resolveImgSrc(el);
     issues.push({ severity: sev, title, wcag, principle, description: desc, fix, element: el?.outerHTML?.slice(0,200) || null, imgSrc });
   }
   function pass(t, w) { passes.push({ title: t, wcag: w }); }
@@ -540,7 +549,7 @@ function IssueRow({ issue }) {
           <p style={{ color:C.textSub, fontSize:13, margin:"13px 0 10px", lineHeight:1.7 }}>{issue.description}</p>
           {issue.imgSrc ? (
             <div style={{ display:"flex", gap:10, alignItems:"flex-start", margin:"9px 0" }}>
-              <img src={issue.imgSrc} alt="" style={{ width:60, height:60, borderRadius:8, objectFit:"cover", background:C.bg, border:`1px solid ${C.border}`, flexShrink:0 }} onError={e=>{e.target.style.display="none"}}/>
+              <img src={issue.imgSrc} alt="" style={{ width:60, height:60, borderRadius:8, objectFit:"cover", background:C.bg, border:`1px solid ${C.border}`, flexShrink:0 }} onError={e=>{e.target.onerror=null;e.target.style.display="none";e.target.nextElementSibling.style.display="flex";}}/><div style={{ display:"none", width:60, height:60, borderRadius:8, background:C.bg, border:`1px solid ${C.border}`, alignItems:"center", justifyContent:"center", fontSize:20, color:C.textMuted, flexShrink:0 }}>✕</div>
               <div style={{ flex:1, minWidth:0 }}>
                 {issue.element && <pre style={{ background:"#0D1421", color:"#7DD3FC", padding:"11px 15px", borderRadius:8, fontSize:11, overflowX:"auto", margin:0, fontFamily:"'JetBrains Mono','Fira Code',monospace", whiteSpace:"pre-wrap", wordBreak:"break-all", lineHeight:1.6 }}>{issue.element}</pre>}
               </div>
@@ -768,7 +777,7 @@ export default function App() {
           context: img.closest("a") ? "Link image" : img.closest("button") ? "Button image" : "",
         })));
         // Run local WCAG scan on pasted HTML too
-        const localResult = runLocalScan(parsedDoc);
+        const localResult = runLocalScan(parsedDoc, baseUrl);
         headlessData = {
           url: "pasted HTML",
           scannedAt: new Date().toISOString(),
@@ -874,7 +883,7 @@ export default function App() {
 
             // Run full local WCAG scan (mirrors bookmarklet logic)
             setProgress("Running local accessibility checks…"); setProgressPct(30);
-            const localResult = runLocalScan(parsedDoc);
+            const localResult = runLocalScan(parsedDoc, baseUrl);
 
             headlessData = {
               url: url.trim(),
@@ -1005,6 +1014,7 @@ Respond ONLY with valid JSON. No markdown, no code fences, no preamble. Pure JSO
             principle: sevMap[i.sev] || "Robust",
             description: i.detail,
             element: i.snippet || null,
+            imgSrc: i.imgSrc || "",
             fix: `Address WCAG ${i.wcag} — ${i.title}`
           })),
           passes: headlessData.passes || [],
@@ -1040,6 +1050,7 @@ Respond ONLY with valid JSON. No markdown, no code fences, no preamble. Pure JSO
         // Validate required fields
         if (!parsed.score && parsed.score !== 0) parsed.score = headlessData?.score || 50;
         if (!parsed.issues) parsed.issues = [];
+        parsed.issues = parsed.issues.map(i => ({ ...i, imgSrc: i.imgSrc || "" }));
         if (!parsed.passes) parsed.passes = [];
         if (!parsed.stats) parsed.stats = { critical:0, serious:0, moderate:0, minor:0 };
 
