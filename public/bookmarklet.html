@@ -244,6 +244,11 @@ var css='@import url(\\'https://fonts.googleapis.com/css2?family=Outfit:wght@400
 +'.bp-img-preview-wrap{display:flex;gap:10px;align-items:flex-start;margin:8px 0}'
 +'.bp-img-fallback{width:60px;height:60px;border-radius:8px;background:#f1f5f9;border:1px solid #e2e8f0;display:flex;align-items:center;justify-content:center;font-size:20px;color:#94a3b8;flex-shrink:0}'
 +'.bp-fix{background:#dcfce7;border:1px solid #86efac;border-radius:7px;padding:8px 11px;font-size:11px;color:#166534;line-height:1.6}'
++'.bp-instances-toggle{background:none;border:1px solid #e2e8f0;border-radius:6px;padding:5px 10px;font-size:11px;color:#64748b;cursor:pointer;font-family:Outfit,sans-serif;font-weight:600;margin:6px 0}'
++'.bp-instances-toggle:hover{background:#f8fafc;border-color:#cbd5e1}'
++'.bp-instances-list{margin:6px 0 0;padding:0;display:none}'
++'.bp-instances-list.open{display:block}'
++'.bp-instance-item{padding:6px 0;border-top:1px solid #f1f5f9}'
 +'.bp-pass{display:flex;align-items:center;gap:8px;padding:8px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;margin:0 12px 6px;font-size:12px;color:#166534;font-weight:500}'
 +'.bp-img-card{border:1px solid #f1f5f9;border-radius:10px;margin:0 12px 7px;padding:10px 12px;display:flex;gap:10px;align-items:center}'
 +'.bp-img-thumb{width:60px;height:60px;border-radius:8px;object-fit:cover;background:#f1f5f9;border:1px solid #e2e8f0;flex-shrink:0}'
@@ -269,12 +274,14 @@ function runScan(){
   var beaconOverlay=document.getElementById('beacon-overlay');
   function isBeaconEl(el){if(!el)return false;if(beaconPanel&&beaconPanel.contains(el))return true;if(beaconOverlay&&el===beaconOverlay)return true;return false;}
   function qsa(sel){return Array.from(document.querySelectorAll(sel)).filter(function(el){return!isBeaconEl(el);});}
-  function push(sev,title,wcag,desc,fix,el,extraImgSrcs){
+  function push(sev,title,wcag,desc,fix,el,extraImgSrcs,allEls){
     var snippet='';
     var imgSrc='';
     if(el){try{snippet=el.outerHTML?el.outerHTML.slice(0,120):'';}catch(e){}}
     if(el&&el.tagName==='IMG'){try{imgSrc=el.src||'';}catch(e){}}
-    issues.push({sev:sev,title:title,wcag:wcag,desc:desc,fix:fix,el:snippet,imgSrc:imgSrc,imgSrcs:extraImgSrcs||[]});
+    var instances=[];
+    if(allEls&&allEls.length>1){allEls.slice(0,20).forEach(function(e){var s='',iS='';if(e){try{s=e.outerHTML?e.outerHTML.slice(0,120):'';}catch(x){}}if(e&&e.tagName==='IMG'){try{iS=e.src||'';}catch(x){}}instances.push({el:s,imgSrc:iS});});}
+    issues.push({sev:sev,title:title,wcag:wcag,desc:desc,fix:fix,el:snippet,imgSrc:imgSrc,imgSrcs:extraImgSrcs||[],instances:instances});
   }
   function pass(t,w){passes.push({t:t,w:w});}
 
@@ -296,14 +303,14 @@ function runScan(){
     if(!img.hasAttribute('alt')){miss.push(img);imgs.push({src:img.src,srcRaw:(img.getAttribute('src')||'').slice(0,80),missingAlt:true});}
     else if(img.getAttribute('alt').trim()===''){decoImgs.push(img);imgs.push({src:img.src,srcRaw:(img.getAttribute('src')||'').slice(0,80),missingAlt:false});}
   });
-  if(miss.length){ded+=miss.length<=2?4:miss.length<=5?7:10;var missSrcs=miss.map(function(m){try{return m.src||'';}catch(e){return'';}});push('critical','Images missing alt text ('+miss.length+')','1.1.1','Images with no alt attribute are invisible to screen readers.','Add descriptive alt text to each image, or alt="" for decorative images.',miss[0],missSrcs);}
+  if(miss.length){ded+=miss.length<=2?4:miss.length<=5?7:10;var missSrcs=miss.map(function(m){try{return m.src||'';}catch(e){return'';}});push('critical','Images missing alt text ('+miss.length+')','1.1.1','Images with no alt attribute are invisible to screen readers.','Add descriptive alt text to each image, or alt="" for decorative images.',miss[0],missSrcs,miss);}
   else pass('Alt text present on all images','1.1.1');
-  if(decoImgs.length){var decoSrcs=decoImgs.map(function(m){try{return m.src||'';}catch(e){return'';}});push('minor',decoImgs.length+' image(s) with empty alt \\u2014 verify decorative','1.1.1','Images with alt="" are treated as decorative. Confirm they add no meaning.','If the image conveys information, add descriptive alt text.',decoImgs[0],decoSrcs);}
+  if(decoImgs.length){var decoSrcs=decoImgs.map(function(m){try{return m.src||'';}catch(e){return'';}});push('minor',decoImgs.length+' image(s) with empty alt \\u2014 verify decorative','1.1.1','Images with alt="" are treated as decorative. Confirm they add no meaning.','If the image conveys information, add descriptive alt text.',decoImgs[0],decoSrcs,decoImgs);}
 
   // 1.2.2 Video captions
   var videos=qsa('video');
   var noCaptions=videos.filter(function(v){return!v.querySelector('track[kind=captions]');});
-  if(noCaptions.length){ded+=6;push('serious',noCaptions.length+' video(s) without captions','1.2.2','Videos must have synchronized captions.','Add <track kind="captions"> to each video element.',noCaptions[0]);}
+  if(noCaptions.length){ded+=6;push('serious',noCaptions.length+' video(s) without captions','1.2.2','Videos must have synchronized captions.','Add <track kind="captions"> to each video element.',noCaptions[0],null,noCaptions);}
 
   // 1.3.1 Heading structure
   var h1s=qsa('h1');
@@ -328,7 +335,7 @@ function runScan(){
     var wrapped=inp.closest('label');
     return!hasLabel&&!hasAria&&!hasTitle&&!wrapped;
   });
-  if(inputs.length){ded+=inputs.length<=2?6:10;push('critical',inputs.length+' unlabeled form input(s)','1.3.1','Form fields must have associated labels for screen readers.','Add a <label for="id"> or aria-label to each input.',inputs[0]);}
+  if(inputs.length){ded+=inputs.length<=2?6:10;push('critical',inputs.length+' unlabeled form input(s)','1.3.1','Form fields must have associated labels for screen readers.','Add a <label for="id"> or aria-label to each input.',inputs[0],null,inputs);}
   else pass('All form inputs have labels','1.3.1');
 
   // 1.4.1 Color only
@@ -336,7 +343,7 @@ function runScan(){
     var s=window.getComputedStyle(a);
     return s.textDecoration.indexOf('underline')===-1&&s.fontWeight<700;
   });
-  if(colorLinks.length>5){ded+=3;push('moderate','Links may rely on color alone ('+colorLinks.length+')','1.4.1','Links should be distinguishable without color (underline or bold).','Add text-decoration: underline or another visual cue.',colorLinks[0]);}
+  if(colorLinks.length>5){ded+=3;push('moderate','Links may rely on color alone ('+colorLinks.length+')','1.4.1','Links should be distinguishable without color (underline or bold).','Add text-decoration: underline or another visual cue.',colorLinks[0],null,colorLinks);}
   else pass('Links are visually distinguishable','1.4.1');
 
   // 1.4.2 Autoplay audio
@@ -362,7 +369,7 @@ function runScan(){
     var required=isLarge?3:4.5;
     if(ratio<required)contrastFails.push({el:el,ratio:ratio.toFixed(2),required:required});
   });
-  if(contrastFails.length){ded+=contrastFails.length<=3?5:contrastFails.length<=8?8:12;push('serious',contrastFails.length+' color contrast failure(s)','1.4.3','Text must have '+contrastFails[0].required+':1 contrast ratio. Found '+contrastFails[0].ratio+':1.','Increase text color contrast to meet WCAG AA minimums.',contrastFails[0].el);}
+  if(contrastFails.length){ded+=contrastFails.length<=3?5:contrastFails.length<=8?8:12;push('serious',contrastFails.length+' color contrast failure(s)','1.4.3','Text must have '+contrastFails[0].required+':1 contrast ratio. Found '+contrastFails[0].ratio+':1.','Increase text color contrast to meet WCAG AA minimums.',contrastFails[0].el,null,contrastFails.map(function(c){return c.el;}));}
   else pass('Color contrast passes on sampled elements','1.4.3');
 
   // 1.4.4 Zoom disabled
@@ -381,12 +388,12 @@ function runScan(){
 
   // 2.1.1 Positive tabindex
   var badTabs=qsa('[tabindex]').filter(function(el){return parseInt(el.getAttribute('tabindex'))>0;});
-  if(badTabs.length){ded+=3;push('moderate','Positive tabindex values found ('+badTabs.length+')','2.1.1','tabindex > 0 disrupts natural focus order.','Remove positive tabindex values; use DOM order instead.',badTabs[0]);}
+  if(badTabs.length){ded+=3;push('moderate','Positive tabindex values found ('+badTabs.length+')','2.1.1','tabindex > 0 disrupts natural focus order.','Remove positive tabindex values; use DOM order instead.',badTabs[0],null,badTabs);}
   else pass('No positive tabindex values','2.1.1');
 
   // Negative tabindex on interactive
   var negTabs=qsa('a[href][tabindex="-1"],button[tabindex="-1"]');
-  if(negTabs.length){ded+=3;push('moderate','Interactive elements removed from tab order ('+negTabs.length+')','2.1.1','tabindex=-1 makes elements unreachable by keyboard.','Remove tabindex=-1 from interactive elements.',negTabs[0]);}
+  if(negTabs.length){ded+=3;push('moderate','Interactive elements removed from tab order ('+negTabs.length+')','2.1.1','tabindex=-1 makes elements unreachable by keyboard.','Remove tabindex=-1 from interactive elements.',negTabs[0],null,negTabs);}
 
   // 2.3.3 Reduced motion
   var hasMotionQuery=false;
@@ -408,7 +415,7 @@ function runScan(){
   // 2.4.4 Vague link text
   var vague=['click here','here','read more','more','learn more','link','this','continue'];
   var vagueLinks=qsa('a').filter(function(a){return vague.indexOf(a.textContent.trim().toLowerCase())!==-1;});
-  if(vagueLinks.length){ded+=vagueLinks.length<=3?3:5;push('moderate',vagueLinks.length+' vague link(s) found','2.4.4','Link text like "click here" is meaningless out of context.','Use descriptive link text that makes sense on its own.',vagueLinks[0]);}
+  if(vagueLinks.length){ded+=vagueLinks.length<=3?3:5;push('moderate',vagueLinks.length+' vague link(s) found','2.4.4','Link text like "click here" is meaningless out of context.','Use descriptive link text that makes sense on its own.',vagueLinks[0],null,vagueLinks);}
   else pass('Link text is descriptive','2.4.4');
 
   // 2.4.4 Empty links
@@ -418,17 +425,17 @@ function runScan(){
     var hasImg=a.querySelector('img[alt]:not([alt=""])');
     return!txt&&!aria&&!hasImg;
   });
-  if(emptyLinks.length){ded+=emptyLinks.length<=2?3:5;push('serious','Empty links ('+emptyLinks.length+')','2.4.4','Links with no text are meaningless to screen readers.','Add visible text or aria-label to each link.',emptyLinks[0]);}
+  if(emptyLinks.length){ded+=emptyLinks.length<=2?3:5;push('serious','Empty links ('+emptyLinks.length+')','2.4.4','Links with no text are meaningless to screen readers.','Add visible text or aria-label to each link.',emptyLinks[0],null,emptyLinks);}
 
   // 2.4.4 target=_blank without warning
   var blankLinks=qsa('a[target="_blank"]').filter(function(a){
     return!(a.getAttribute('aria-label')||'').includes('new')&&!(a.textContent||'').includes('new window');
   });
-  if(blankLinks.length>2){ded+=2;push('minor',blankLinks.length+' links open new tab without warning','2.4.4','Users should be warned when links open in a new tab.','Add aria-label or text indicating "opens in new tab".',blankLinks[0]);}
+  if(blankLinks.length>2){ded+=2;push('minor',blankLinks.length+' links open new tab without warning','2.4.4','Users should be warned when links open in a new tab.','Add aria-label or text indicating "opens in new tab".',blankLinks[0],null,blankLinks);}
 
   // 2.4.6 Empty headings
   var emptyH=qsa('h1,h2,h3,h4,h5,h6').filter(function(h){return h.textContent.trim().length===0;});
-  if(emptyH.length){ded+=3;push('moderate',emptyH.length+' empty heading(s)','2.4.6','Empty headings confuse screen reader navigation.','Remove empty headings or add text content.',emptyH[0]);}
+  if(emptyH.length){ded+=3;push('moderate',emptyH.length+' empty heading(s)','2.4.6','Empty headings confuse screen reader navigation.','Remove empty headings or add text content.',emptyH[0],null,emptyH);}
   else pass('No empty headings','2.4.6');
 
   // 2.4.11 Focus indicators
@@ -436,7 +443,7 @@ function runScan(){
   var hiddenFocus=focusEls.filter(function(el){
     try{var cs=window.getComputedStyle(el);var ow=parseFloat(cs.outlineWidth);var os=cs.outlineStyle;var shadow=cs.boxShadow;return(ow===0||os==='none')&&(!shadow||shadow==='none');}catch(e){return false;}
   });
-  if(hiddenFocus.length>=3){ded+=5;push('serious','Focus indicator hidden ('+hiddenFocus.length+' elements)','2.4.11','outline:none without replacement makes keyboard navigation invisible.','Restore outline or add a visible :focus style.',hiddenFocus[0]);}
+  if(hiddenFocus.length>=3){ded+=5;push('serious','Focus indicator hidden ('+hiddenFocus.length+' elements)','2.4.11','outline:none without replacement makes keyboard navigation invisible.','Restore outline or add a visible :focus style.',hiddenFocus[0],null,hiddenFocus);}
   else pass('Focus indicators appear visible','2.4.11');
 
   // 2.5.3 ARIA label mismatch
@@ -445,12 +452,12 @@ function runScan(){
     var text=(el.textContent||'').toLowerCase().trim();
     return text.length>2&&label.length>2&&!label.includes(text.slice(0,8))&&!text.includes(label.slice(0,8));
   });
-  if(mismatch.length){ded+=mismatch.length<=3?4:6;push('serious','Possible aria-label mismatch ('+mismatch.length+')','2.5.3','aria-label should include visible text so speech users can activate by voice.','Ensure aria-label starts with or includes the visible text content.',mismatch[0]);}
+  if(mismatch.length){ded+=mismatch.length<=3?4:6;push('serious','Possible aria-label mismatch ('+mismatch.length+')','2.5.3','aria-label should include visible text so speech users can activate by voice.','Ensure aria-label starts with or includes the visible text content.',mismatch[0],null,mismatch);}
   else pass('Accessible names match visible text','2.5.3');
 
   // 2.5.8 Touch targets
   var smallTargets=qsa('a,button,[role=button],[role=link]').filter(function(el){var r=el.getBoundingClientRect();return r.width>0&&r.height>0&&(r.width<24||r.height<24);});
-  if(smallTargets.length){ded+=smallTargets.length<=3?3:5;push('moderate',smallTargets.length+' small touch target(s)','2.5.8','Interactive elements should be at least 24x24px (WCAG 2.2).','Increase padding or min-width/min-height to 24px.',smallTargets[0]);}
+  if(smallTargets.length){ded+=smallTargets.length<=3?3:5;push('moderate',smallTargets.length+' small touch target(s)','2.5.8','Interactive elements should be at least 24x24px (WCAG 2.2).','Increase padding or min-width/min-height to 24px.',smallTargets[0],null,smallTargets);}
   else pass('Touch targets meet minimum size','2.5.8');
 
   // 3.1.1 Language
@@ -461,7 +468,7 @@ function runScan(){
   // 3.3.2 Required fields
   var reqInputs=qsa('[required],[aria-required=true]');
   var unlabeledReq=reqInputs.filter(function(inp){return!inp.getAttribute('aria-label')&&!inp.getAttribute('aria-labelledby')&&!(inp.id&&document.querySelector('label[for="'+inp.id+'"]'));});
-  if(unlabeledReq.length){ded+=3;push('moderate',unlabeledReq.length+' required field(s) not labeled','3.3.2','Required fields must be clearly labeled and indicated.','Add labels and aria-required to required fields.',unlabeledReq[0]);}
+  if(unlabeledReq.length){ded+=3;push('moderate',unlabeledReq.length+' required field(s) not labeled','3.3.2','Required fields must be clearly labeled and indicated.','Add labels and aria-required to required fields.',unlabeledReq[0],null,unlabeledReq);}
   else if(reqInputs.length)pass('Required fields are labeled','3.3.2');
 
   // 4.1.1 Duplicate IDs
@@ -475,24 +482,24 @@ function runScan(){
   var ariaEls=qsa('[role]');
   var validRoles=['alert','alertdialog','application','article','banner','button','cell','checkbox','columnheader','combobox','complementary','contentinfo','definition','dialog','directory','document','feed','figure','form','grid','gridcell','group','heading','img','link','list','listbox','listitem','log','main','marquee','math','menu','menubar','menuitem','menuitemcheckbox','menuitemradio','navigation','none','note','option','presentation','progressbar','radio','radiogroup','region','row','rowgroup','rowheader','scrollbar','search','searchbox','separator','slider','spinbutton','status','switch','tab','table','tablist','tabpanel','term','textbox','timer','toolbar','tooltip','tree','treegrid','treeitem'];
   var badRoles=ariaEls.filter(function(el){return validRoles.indexOf(el.getAttribute('role'))===-1;});
-  if(badRoles.length){ded+=4;push('serious','Invalid ARIA role(s) found ('+badRoles.length+')','4.1.1','Invalid roles are ignored by assistive technologies.','Use only valid WAI-ARIA roles.',badRoles[0]);}
+  if(badRoles.length){ded+=4;push('serious','Invalid ARIA role(s) found ('+badRoles.length+')','4.1.1','Invalid roles are ignored by assistive technologies.','Use only valid WAI-ARIA roles.',badRoles[0],null,badRoles);}
   else pass('All ARIA roles are valid','4.1.1');
 
   // 4.1.2 ARIA widget props
   var ariaFails=qsa("[role='switch'],[role='checkbox'],[role='radio']").filter(function(el){return!el.hasAttribute('aria-checked');}).slice(0,5);
-  if(ariaFails.length){ded+=5;push('serious','ARIA widgets missing required properties ('+ariaFails.length+')','4.1.2','Custom ARIA widgets need required state properties.','Add aria-checked to switch/checkbox/radio widgets.',ariaFails[0]);}
+  if(ariaFails.length){ded+=5;push('serious','ARIA widgets missing required properties ('+ariaFails.length+')','4.1.2','Custom ARIA widgets need required state properties.','Add aria-checked to switch/checkbox/radio widgets.',ariaFails[0],null,ariaFails);}
 
   // 4.1.2 Unnamed buttons
   var unnamedBtns=qsa('button,[role=button]').filter(function(el){
     return!el.textContent.trim()&&!el.getAttribute('aria-label')&&!el.getAttribute('aria-labelledby')&&!el.getAttribute('title');
   });
-  if(unnamedBtns.length){ded+=unnamedBtns.length<=2?5:8;push('critical',unnamedBtns.length+' unnamed button(s)','4.1.2','Buttons must have accessible names for screen readers.','Add text, aria-label, or title to each button.',unnamedBtns[0]);}
+  if(unnamedBtns.length){ded+=unnamedBtns.length<=2?5:8;push('critical',unnamedBtns.length+' unnamed button(s)','4.1.2','Buttons must have accessible names for screen readers.','Add text, aria-label, or title to each button.',unnamedBtns[0],null,unnamedBtns);}
   else pass('All buttons have accessible names','4.1.2');
 
   // 4.1.2 Unnamed iframes
   var iframes=qsa('iframe');
   var badIframes=iframes.filter(function(f){return!f.getAttribute('title')&&!f.getAttribute('aria-label');});
-  if(badIframes.length){ded+=4;push('serious',badIframes.length+' iframe(s) missing title','4.1.2','Iframes must have a title attribute describing their content.','Add a descriptive title attribute to each iframe.',badIframes[0]);}
+  if(badIframes.length){ded+=4;push('serious',badIframes.length+' iframe(s) missing title','4.1.2','Iframes must have a title attribute describing their content.','Add a descriptive title attribute to each iframe.',badIframes[0],null,badIframes);}
   else if(iframes.length)pass('All iframes have titles','4.1.2');
 
   // SVG accessible names
@@ -507,12 +514,12 @@ function runScan(){
     var parentHasLabel=parentBtn&&(parentBtn.getAttribute('aria-label')||parentBtn.textContent.trim().length>1);
     if(!hasTitle&&!hasAria&&!parentHasLabel)badSvg.push(svg);
   });
-  if(badSvg.length){ded+=badSvg.length<=3?3:badSvg.length<=10?5:7;push('serious',badSvg.length+' SVG element(s) missing accessible name','4.1.2','Meaningful SVGs need a <title> or aria-label.','Add <title> inside <svg> or aria-label on the SVG.',badSvg[0]);}
+  if(badSvg.length){ded+=badSvg.length<=3?3:badSvg.length<=10?5:7;push('serious',badSvg.length+' SVG element(s) missing accessible name','4.1.2','Meaningful SVGs need a <title> or aria-label.','Add <title> inside <svg> or aria-label on the SVG.',badSvg[0],null,badSvg);}
   else pass('SVGs have accessible names or are decorative','4.1.2');
 
   // Sticky elements
   var sticky=qsa('*').slice(0,500).filter(function(el){try{var p=window.getComputedStyle(el).position;return p==='sticky'||p==='fixed';}catch(e){return false;}});
-  if(sticky.length>2)push('minor',sticky.length+' sticky/fixed element(s)','2.4.11','Sticky elements may obstruct content for zoom users.','Ensure sticky elements do not obscure content when zoomed.',sticky[0]);
+  if(sticky.length>2)push('minor',sticky.length+' sticky/fixed element(s)','2.4.11','Sticky elements may obstruct content for zoom users.','Ensure sticky elements do not obscure content when zoomed.',sticky[0],null,sticky);
 
   // Cognitive load
   var interactive=qsa('a,button,input,select,textarea,[role=button],[role=link],[onclick]');
@@ -598,6 +605,17 @@ function runScan(){
         h+='</div></div>';
       } else if(issue.el){
         h+='<div class="bp-code">'+issue.el.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>';
+      }
+      if(issue.instances&&issue.instances.length>1){
+        h+='<button class="bp-instances-toggle" onclick="var l=this.nextElementSibling;var o=l.classList.toggle(\\'open\\');this.textContent=o?\\'Hide instances \\u25BE\\':\\'Show all '+issue.instances.length+' instances \\u25B8\\'">Show all '+issue.instances.length+' instances \\u25B8</button>';
+        h+='<div class="bp-instances-list">';
+        issue.instances.forEach(function(inst,idx){
+          h+='<div class="bp-instance-item"><span style="font-size:10px;color:#94a3b8;font-weight:700">#'+(idx+1)+'</span>';
+          if(inst.imgSrc)h+=' <img class="bp-img-preview" style="width:40px;height:40px;vertical-align:middle;margin:0 4px" src="'+inst.imgSrc.replace(/"/g,'&quot;')+'" alt="" onerror="this.style.display=\\'none\\'">';
+          if(inst.el)h+='<div class="bp-code" style="margin:4px 0 0">'+inst.el.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>';
+          h+='</div>';
+        });
+        h+='</div>';
       }
       h+='<div class="bp-fix"><b>Fix:</b> '+issue.fix+'</div>';
       h+='</div></div>';

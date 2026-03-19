@@ -49,13 +49,19 @@ function runLocalScan(doc, baseUrl) {
     return raw;
   }
 
-  function push(sev, title, wcag, desc, fix, el, extraImgSrcs) {
+  function push(sev, title, wcag, desc, fix, el, extraImgSrcs, allEls) {
     const principleMap = {
       "1":  "Perceivable", "2": "Operable", "3": "Understandable", "4": "Robust"
     };
     const principle = principleMap[wcag?.split(".")[0]] || "Robust";
     const imgSrc = resolveImgSrc(el);
-    issues.push({ severity: sev, title, wcag, principle, description: desc, fix, element: el?.outerHTML?.slice(0,200) || null, imgSrc, imgSrcs: extraImgSrcs || [] });
+    const instances = [];
+    if (allEls && allEls.length > 1) {
+      allEls.slice(0, 20).forEach(e => {
+        instances.push({ element: e?.outerHTML?.slice(0,200) || null, imgSrc: resolveImgSrc(e) });
+      });
+    }
+    issues.push({ severity: sev, title, wcag, principle, description: desc, fix, element: el?.outerHTML?.slice(0,200) || null, imgSrc, imgSrcs: extraImgSrcs || [], instances });
   }
   function pass(t, w) { passes.push({ title: t, wcag: w }); }
 
@@ -106,9 +112,9 @@ function runLocalScan(doc, baseUrl) {
       if (!img.hasAttribute("alt")) miss.push(img);
       else if (img.getAttribute("alt").trim() === "") decorative.push(img);
     });
-    if (miss.length) { ded += miss.length <= 2 ? 4 : miss.length <= 5 ? 7 : 10; const missSrcs = miss.map(m => resolveImgSrc(m)); push("critical", `Images missing alt text (${miss.length})`, "1.1.1", "Images with no alt attribute are invisible to screen readers.", 'Add alt="description". Use alt="" only for truly decorative images.', miss[0], missSrcs); }
+    if (miss.length) { ded += miss.length <= 2 ? 4 : miss.length <= 5 ? 7 : 10; const missSrcs = miss.map(m => resolveImgSrc(m)); push("critical", `Images missing alt text (${miss.length})`, "1.1.1", "Images with no alt attribute are invisible to screen readers.", 'Add alt="description". Use alt="" only for truly decorative images.', miss[0], missSrcs, miss); }
     else pass("All images have alt text", "1.1.1");
-    if (decorative.length) { const decoSrcs = decorative.map(m => resolveImgSrc(m)); push("minor", `${decorative.length} image(s) with empty alt — verify decorative`, "1.1.1", "Images with alt=\"\" are treated as decorative. Confirm these add no meaning.", "If image conveys information, add a descriptive alt attribute.", decorative[0], decoSrcs); }
+    if (decorative.length) { const decoSrcs = decorative.map(m => resolveImgSrc(m)); push("minor", `${decorative.length} image(s) with empty alt — verify decorative`, "1.1.1", "Images with alt=\"\" are treated as decorative. Confirm these add no meaning.", "If image conveys information, add a descriptive alt attribute.", decorative[0], decoSrcs, decorative); }
   } catch(e) {}
 
   // 1.3.1 Headings
@@ -123,7 +129,7 @@ function runLocalScan(doc, baseUrl) {
       const prev = parseInt(heads[i-1].tagName[1]), cur = parseInt(heads[i].tagName[1]);
       if (cur - prev > 1) skipped.push(heads[i]);
     }
-    if (skipped.length) { ded += 3; push("moderate", `Heading levels skipped (${skipped.length})`, "1.3.1", "Jumping e.g. H2→H4 breaks document outline for screen readers.", "Use heading levels in order, never skip.", skipped[0]); }
+    if (skipped.length) { ded += 3; push("moderate", `Heading levels skipped (${skipped.length})`, "1.3.1", "Jumping e.g. H2→H4 breaks document outline for screen readers.", "Use heading levels in order, never skip.", skipped[0], null, skipped); }
     else if (heads.length > 1) pass("Heading levels are in order", "1.3.1");
   } catch(e) {}
 
@@ -140,7 +146,7 @@ function runLocalScan(doc, baseUrl) {
       const wrapped = inp.closest("label");
       return !hasLbl && !ariaLabel && !hasValidLabelledBy && !wrapped;
     });
-    if (unlabeled.length) { ded += unlabeled.length <= 2 ? 6 : 10; push("critical", `Form inputs without labels (${unlabeled.length})`, "1.3.1", "Placeholder text disappears on input and is not a substitute for a label.", "Add <label> or aria-label to each input.", unlabeled[0]); }
+    if (unlabeled.length) { ded += unlabeled.length <= 2 ? 6 : 10; push("critical", `Form inputs without labels (${unlabeled.length})`, "1.3.1", "Placeholder text disappears on input and is not a substitute for a label.", "Add <label> or aria-label to each input.", unlabeled[0], null, unlabeled); }
     else if (inputs.length) pass("All form inputs are labeled", "1.3.1");
   } catch(e) {}
 
@@ -151,7 +157,7 @@ function runLocalScan(doc, baseUrl) {
       return a.includes("name") || a.includes("email") || a.includes("phone");
     });
     const na = pf.filter(i => !i.getAttribute("autocomplete"));
-    if (na.length) { ded += 2; push("minor", `Personal fields missing autocomplete (${na.length})`, "1.3.5", "Name and email fields need autocomplete for assistive tech users.", "Add autocomplete=name or autocomplete=email.", na[0]); }
+    if (na.length) { ded += 2; push("minor", `Personal fields missing autocomplete (${na.length})`, "1.3.5", "Name and email fields need autocomplete for assistive tech users.", "Add autocomplete=name or autocomplete=email.", na[0], null, na); }
     else if (pf.length) pass("Personal fields have autocomplete", "1.3.5");
   } catch(e) {}
 
@@ -192,7 +198,7 @@ function runLocalScan(doc, baseUrl) {
           if (ratio < required) fails.push({ el, ratio: ratio.toFixed(2), required });
         } catch { /* skip element */ }
       });
-      if (fails.length) { ded += fails.length <= 3 ? 5 : fails.length <= 8 ? 8 : 12; push("serious", `Color contrast failures (${fails.length})`, "1.4.3", `Text must have ${fails[0].required}:1 contrast ratio. Found ${fails[0].ratio}:1.`, "Use a contrast checker to ensure colors meet WCAG AA ratios.", fails[0].el); }
+      if (fails.length) { ded += fails.length <= 3 ? 5 : fails.length <= 8 ? 8 : 12; push("serious", `Color contrast failures (${fails.length})`, "1.4.3", `Text must have ${fails[0].required}:1 contrast ratio. Found ${fails[0].ratio}:1.`, "Use a contrast checker to ensure colors meet WCAG AA ratios.", fails[0].el, null, fails.map(f=>f.el)); }
       else if (textEls.length > 0) pass(`Color contrast passes sample check (${textEls.length}/120 elements — gradients not checked)`, "1.4.3");
     } catch(e) { /* contrast check failed gracefully */ }
   } else {
@@ -224,7 +230,7 @@ function runLocalScan(doc, baseUrl) {
   // 2.1.1 Positive tabindex
   try {
     const pos = Array.from(doc.querySelectorAll("[tabindex]")).filter(el => parseInt(el.getAttribute("tabindex")) > 0);
-    if (pos.length) { ded += 3; push("moderate", `Positive tabindex values (${pos.length})`, "2.1.1", "Positive tabindex values disrupt natural keyboard navigation order.", "Use tabindex=0 or -1 only. Let DOM order determine tab sequence.", pos[0]); }
+    if (pos.length) { ded += 3; push("moderate", `Positive tabindex values (${pos.length})`, "2.1.1", "Positive tabindex values disrupt natural keyboard navigation order.", "Use tabindex=0 or -1 only. Let DOM order determine tab sequence.", pos[0], null, pos); }
     else pass("No positive tabindex values", "2.1.1");
   } catch(e) {}
 
@@ -252,7 +258,7 @@ function runLocalScan(doc, baseUrl) {
   // 2.4.3 Tabindex=-1 on interactive
   try {
     const trapped = Array.from(doc.querySelectorAll("a[href][tabindex='-1'],button[tabindex='-1']")).filter(el => !hasAriaHiddenAncestor(el));
-    if (trapped.length) { ded += 3; push("moderate", `Interactive elements removed from tab order (${trapped.length})`, "2.4.3", "tabindex=-1 makes interactive elements unreachable by keyboard.", "Remove tabindex=-1 unless element also has aria-hidden=true.", trapped[0]); }
+    if (trapped.length) { ded += 3; push("moderate", `Interactive elements removed from tab order (${trapped.length})`, "2.4.3", "tabindex=-1 makes interactive elements unreachable by keyboard.", "Remove tabindex=-1 unless element also has aria-hidden=true.", trapped[0], null, trapped); }
   } catch(e) {}
 
   // 2.4.4 Vague links
@@ -266,8 +272,8 @@ function runLocalScan(doc, baseUrl) {
       if (!txt && !aria && !hasImg) empty.push(a);
       else if (!aria && vague.includes(txt)) vagueFound.push(a);
     });
-    if (empty.length) { ded += empty.length <= 2 ? 3 : 5; push("serious", `Empty links with no accessible name (${empty.length})`, "2.4.4", "Links with no text are meaningless to screen reader users.", "Add descriptive text, aria-label, or an img with alt inside the link.", empty[0]); }
-    if (vagueFound.length) { ded += vagueFound.length <= 3 ? 3 : 5; push("moderate", `Links with vague text (${vagueFound.length})`, "2.4.4", '"Click here" and "Read more" are meaningless out of context.', "Use descriptive link text that makes sense alone.", vagueFound[0]); }
+    if (empty.length) { ded += empty.length <= 2 ? 3 : 5; push("serious", `Empty links with no accessible name (${empty.length})`, "2.4.4", "Links with no text are meaningless to screen reader users.", "Add descriptive text, aria-label, or an img with alt inside the link.", empty[0], null, empty); }
+    if (vagueFound.length) { ded += vagueFound.length <= 3 ? 3 : 5; push("moderate", `Links with vague text (${vagueFound.length})`, "2.4.4", '"Click here" and "Read more" are meaningless out of context.', "Use descriptive link text that makes sense alone.", vagueFound[0], null, vagueFound); }
     if (!empty.length && !vagueFound.length) pass("Links have descriptive text", "2.4.4");
   } catch(e) {}
 
@@ -284,7 +290,7 @@ function runLocalScan(doc, baseUrl) {
           return (ow === 0 || os === "none") && (!shadow || shadow === "none");
         } catch { return false; }
       });
-      if (hidden.length >= 3) { ded += 5; push("serious", `Focus indicator hidden (${hidden.length} elements)`, "2.4.11", "outline:none without a replacement makes keyboard navigation invisible.", "Add :focus { outline: 2px solid #1A56DB; outline-offset: 2px } to your CSS.", hidden[0]); }
+      if (hidden.length >= 3) { ded += 5; push("serious", `Focus indicator hidden (${hidden.length} elements)`, "2.4.11", "outline:none without a replacement makes keyboard navigation invisible.", "Add :focus { outline: 2px solid #1A56DB; outline-offset: 2px } to your CSS.", hidden[0], null, hidden); }
       else pass("Focus indicators appear visible", "2.4.11");
     } catch(e) { /* layout check failed gracefully */ }
   } else {
@@ -301,7 +307,7 @@ function runLocalScan(doc, baseUrl) {
       // The visible text must be included in the accessible name
       return !label.includes(text.slice(0, Math.min(text.length, 12))) && !text.includes(label.slice(0, Math.min(label.length, 12)));
     });
-    if (mismatchEls.length) { ded += mismatchEls.length <= 3 ? 4 : 6; push("serious", `Accessible name does not match visible text (${mismatchEls.length})`, "2.5.3", "When aria-label differs from visible text, speech-input users cannot activate controls by speaking what they see.", "Ensure aria-label starts with or includes the visible text content.", mismatchEls[0]); }
+    if (mismatchEls.length) { ded += mismatchEls.length <= 3 ? 4 : 6; push("serious", `Accessible name does not match visible text (${mismatchEls.length})`, "2.5.3", "When aria-label differs from visible text, speech-input users cannot activate controls by speaking what they see.", "Ensure aria-label starts with or includes the visible text content.", mismatchEls[0], null, mismatchEls); }
     else pass("Accessible names match visible text", "2.5.3");
   } catch(e) {}
 
@@ -313,7 +319,7 @@ function runLocalScan(doc, baseUrl) {
         const r = el.getBoundingClientRect();
         return r.width > 0 && r.height > 0 && (r.width < 24 || r.height < 24);
       });
-      if (small.length) { ded += small.length <= 3 ? 3 : 5; push("moderate", `Touch targets too small (${small.length})`, "2.5.8", "Interactive elements must be at least 24×24px per WCAG 2.2.", "Increase size to 24×24px minimum using padding.", small[0]); }
+      if (small.length) { ded += small.length <= 3 ? 3 : 5; push("moderate", `Touch targets too small (${small.length})`, "2.5.8", "Interactive elements must be at least 24×24px per WCAG 2.2.", "Increase size to 24×24px minimum using padding.", small[0], null, small); }
       else pass("Touch targets meet 24×24px minimum", "2.5.8");
     } catch(e) { /* layout check failed gracefully */ }
   } else {
@@ -335,7 +341,7 @@ function runLocalScan(doc, baseUrl) {
   // 3.3.2 Error descriptions
   try {
     const req = Array.from(doc.querySelectorAll("input[required],input[aria-required=true]")).filter(i => !i.getAttribute("aria-describedby"));
-    if (req.length) { ded += req.length <= 2 ? 3 : 4; push("moderate", `Required fields missing error descriptions (${req.length})`, "3.3.2", "Required inputs need aria-describedby pointing to error messages.", "Add aria-describedby to each required field.", req[0]); }
+    if (req.length) { ded += req.length <= 2 ? 3 : 4; push("moderate", `Required fields missing error descriptions (${req.length})`, "3.3.2", "Required inputs need aria-describedby pointing to error messages.", "Add aria-describedby to each required field.", req[0], null, req); }
     else pass("Required fields have error descriptions", "3.3.2");
   } catch(e) {}
 
@@ -358,20 +364,20 @@ function runLocalScan(doc, baseUrl) {
       const title = b.getAttribute("title");
       return !txt && !aria && !title;
     });
-    if (btns.length) { ded += btns.length <= 2 ? 5 : 8; push("critical", `Buttons missing accessible names (${btns.length})`, "4.1.2", "Icon-only buttons need aria-label for screen readers.", "Add aria-label='Action description' to each icon button.", btns[0]); }
+    if (btns.length) { ded += btns.length <= 2 ? 5 : 8; push("critical", `Buttons missing accessible names (${btns.length})`, "4.1.2", "Icon-only buttons need aria-label for screen readers.", "Add aria-label='Action description' to each icon button.", btns[0], null, btns); }
     else pass("All buttons have accessible names", "4.1.2");
   } catch(e) {}
 
   // 4.1.2 Button type in forms
   try {
     const noType = Array.from(doc.querySelectorAll("button:not([type])")).filter(b => b.closest("form"));
-    if (noType.length) push("minor", `Buttons in forms missing type attribute (${noType.length})`, "4.1.2", "Buttons without type default to type='submit', causing accidental form submission.", "Add type='button' to non-submit buttons, type='submit' to submit buttons.", noType[0]);
+    if (noType.length) push("minor", `Buttons in forms missing type attribute (${noType.length})`, "4.1.2", "Buttons without type default to type='submit', causing accidental form submission.", "Add type='button' to non-submit buttons, type='submit' to submit buttons.", noType[0], null, noType);
   } catch(e) {}
 
   // 4.1.2 ARIA required props
   try {
     const ariaFails = Array.from(doc.querySelectorAll("[role='switch'],[role='checkbox'],[role='radio']")).filter(el => !el.hasAttribute("aria-checked")).slice(0,5);
-    if (ariaFails.length) { ded += 5; push("serious", `ARIA widgets missing required properties (${ariaFails.length})`, "4.1.2", "Custom ARIA widgets need required state properties like aria-checked.", "Add aria-checked to switches, checkboxes, and radio roles.", ariaFails[0]); }
+    if (ariaFails.length) { ded += 5; push("serious", `ARIA widgets missing required properties (${ariaFails.length})`, "4.1.2", "Custom ARIA widgets need required state properties like aria-checked.", "Add aria-checked to switches, checkboxes, and radio roles.", ariaFails[0], null, ariaFails); }
   } catch(e) {}
 
   // 4.1.2 SVG accessible names
@@ -383,13 +389,13 @@ function runLocalScan(doc, baseUrl) {
       if (role === "presentation" || role === "none") return false;
       return !svg.getAttribute("aria-label") && !svg.getAttribute("aria-labelledby") && !svg.querySelector("title");
     }).slice(0,10);
-    if (svgs.length > 3) { ded += 4; push("moderate", `SVG icons missing accessible names (${svgs.length})`, "4.1.2", "SVG icons without labels are invisible to screen readers.", "Add aria-label to informational SVGs, or aria-hidden='true' if decorative.", svgs[0]); }
+    if (svgs.length > 3) { ded += 4; push("moderate", `SVG icons missing accessible names (${svgs.length})`, "4.1.2", "SVG icons without labels are invisible to screen readers.", "Add aria-label to informational SVGs, or aria-hidden='true' if decorative.", svgs[0], null, svgs); }
   } catch(e) {}
 
   // 4.1.2 Iframes
   try {
     const frames = Array.from(doc.querySelectorAll("iframe")).filter(f => !f.getAttribute("title"));
-    if (frames.length) { ded += 4; push("serious", `iFrames missing titles (${frames.length})`, "4.1.2", "Screen readers cannot describe the purpose of untitled iframes.", "Add title='Description of content' to each iframe.", frames[0]); }
+    if (frames.length) { ded += 4; push("serious", `iFrames missing titles (${frames.length})`, "4.1.2", "Screen readers cannot describe the purpose of untitled iframes.", "Add title='Description of content' to each iframe.", frames[0], null, frames); }
     else pass("All iframes have titles", "4.1.2");
   } catch(e) {}
 
@@ -531,7 +537,9 @@ function ScoreRing({ score, stats, altCount, totalImages, adaRisk, level }) {
 /* ─── ISSUE ROW ──────────────────────────────────────────────── */
 function IssueRow({ issue }) {
   const [open, setOpen] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   const s = SEV[issue.severity] || SEV.minor;
+  const instances = issue.instances || [];
   return (
     <div style={{ border:`1px solid ${C.border}`, borderRadius:11, overflow:"hidden", marginBottom:7, boxShadow:open?C.shadowMd:"none", transition:"box-shadow .15s" }}>
       <button
@@ -564,6 +572,24 @@ function IssueRow({ issue }) {
             </div>
           ) : issue.element && (
             <pre style={{ background:"#0D1421", color:"#7DD3FC", padding:"11px 15px", borderRadius:8, fontSize:11, overflowX:"auto", margin:"9px 0", fontFamily:"'JetBrains Mono','Fira Code',monospace", whiteSpace:"pre-wrap", wordBreak:"break-all", lineHeight:1.6 }}>{issue.element}</pre>
+          )}
+          {instances.length > 1 && (
+            <div style={{ margin:"8px 0" }}>
+              <button onClick={() => setShowAll(v=>!v)} style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:6, padding:"5px 10px", fontSize:11, color:C.textSub, cursor:"pointer", fontFamily:"'DM Sans',sans-serif", fontWeight:600 }}>
+                {showAll ? "Hide instances ▾" : `Show all ${instances.length} instances ▸`}
+              </button>
+              {showAll && (
+                <div style={{ marginTop:6 }}>
+                  {instances.map((inst, idx) => (
+                    <div key={idx} style={{ padding:"6px 0", borderTop:`1px solid ${C.border}` }}>
+                      <span style={{ fontSize:10, color:C.textMuted, fontWeight:700 }}>#{idx+1}</span>
+                      {inst.imgSrc && <img src={inst.imgSrc} alt="" style={{ width:40, height:40, borderRadius:6, objectFit:"cover", background:C.bg, border:`1px solid ${C.border}`, verticalAlign:"middle", margin:"0 4px" }} onError={e=>{e.target.onerror=null;e.target.style.display="none";}}/>}
+                      {inst.element && <pre style={{ background:"#0D1421", color:"#7DD3FC", padding:"7px 10px", borderRadius:6, fontSize:10, overflowX:"auto", margin:"4px 0 0", fontFamily:"'JetBrains Mono','Fira Code',monospace", whiteSpace:"pre-wrap", wordBreak:"break-all", lineHeight:1.5 }}>{inst.element}</pre>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
           <div style={{ background:C.greenLight, border:`1px solid #6EE7B7`, borderRadius:8, padding:"9px 13px", marginTop:9, display:"flex", gap:7, alignItems:"flex-start" }}>
             <span style={{ color:C.green, fontWeight:700, fontSize:13, flexShrink:0 }}>✓ Fix</span>
@@ -1020,6 +1046,7 @@ Respond ONLY with valid JSON. No markdown, no code fences, no preamble. Pure JSO
             element: i.snippet || null,
             imgSrc: i.imgSrc || "",
             imgSrcs: i.imgSrcs || [],
+            instances: i.instances || [],
             fix: `Address WCAG ${i.wcag} — ${i.title}`
           })).sort((a,b) => (sevOrder[a.severity]||3) - (sevOrder[b.severity]||3));
         parsed = {
@@ -1061,7 +1088,7 @@ Respond ONLY with valid JSON. No markdown, no code fences, no preamble. Pure JSO
         // Validate required fields
         if (!parsed.score && parsed.score !== 0) parsed.score = headlessData?.score || 50;
         if (!parsed.issues) parsed.issues = [];
-        parsed.issues = parsed.issues.map(i => ({ ...i, imgSrc: i.imgSrc || "", imgSrcs: i.imgSrcs || [] }));
+        parsed.issues = parsed.issues.map(i => ({ ...i, imgSrc: i.imgSrc || "", imgSrcs: i.imgSrcs || [], instances: i.instances || [] }));
         const sevOrd = { critical:0, serious:1, moderate:2, minor:3 };
         parsed.issues.sort((a,b) => (sevOrd[a.severity]||3) - (sevOrd[b.severity]||3));
         if (!parsed.passes) parsed.passes = [];
