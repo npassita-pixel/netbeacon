@@ -120,7 +120,7 @@ const SCANNER_SCRIPT = `
     var ratio=(Math.max(L1,L2)+0.05)/(Math.min(L1,L2)+0.05);
     var fontSize=parseFloat(cs.fontSize);
     var isBold=parseInt(cs.fontWeight)>=700;
-    var isLarge=fontSize>=18||(isBold&&fontSize>=14);
+    var isLarge=fontSize>=24||(isBold&&fontSize>=18.66);
     var required=isLarge?3:4.5;
     if(ratio<required) contrastFails.push({el:el,ratio:ratio.toFixed(2),required:required});
   });

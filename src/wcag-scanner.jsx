@@ -187,11 +187,12 @@ function runLocalScan(doc, baseUrl) {
           const l1 = lum(...fg), l2 = lum(...bg);
           const ratio = (Math.max(l1,l2)+0.05)/(Math.min(l1,l2)+0.05);
           const fs = parseFloat(cs.fontSize), bold = parseInt(cs.fontWeight) >= 700;
-          const large = fs >= 18 || (bold && fs >= 14);
-          if (ratio < (large ? 3 : 4.5)) fails.push(el);
+          const large = fs >= 24 || (bold && fs >= 18.66);
+          const required = large ? 3 : 4.5;
+          if (ratio < required) fails.push({ el, ratio: ratio.toFixed(2), required });
         } catch { /* skip element */ }
       });
-      if (fails.length) { ded += fails.length <= 3 ? 5 : fails.length <= 8 ? 8 : 12; push("serious", `Color contrast failures (${fails.length})`, "1.4.3", "Text must have 4.5:1 contrast ratio (3:1 for large/bold text).", "Use a contrast checker to ensure colors meet WCAG AA ratios.", fails[0]); }
+      if (fails.length) { ded += fails.length <= 3 ? 5 : fails.length <= 8 ? 8 : 12; push("serious", `Color contrast failures (${fails.length})`, "1.4.3", `Text must have ${fails[0].required}:1 contrast ratio. Found ${fails[0].ratio}:1.`, "Use a contrast checker to ensure colors meet WCAG AA ratios.", fails[0].el); }
       else if (textEls.length > 0) pass(`Color contrast passes sample check (${textEls.length}/120 elements — gradients not checked)`, "1.4.3");
     } catch(e) { /* contrast check failed gracefully */ }
   } else {
