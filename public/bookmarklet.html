@@ -308,7 +308,7 @@ async function runScan(){
   if(__axeRan&&typeof axe!=='undefined'){
     document.getElementById('bp-scan-txt').textContent='Running axe-core\\u2026';
     try{
-      var axeRes=await axe.run(document,{exclude:[['#beacon-panel'],['#beacon-overlay']]});
+      var axeRes=await axe.run(document,{exclude:[['#beacon-panel'],['#beacon-overlay']],runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa','wcag22aa','best-practice']},rules:{'color-contrast':{enabled:true},'image-alt':{enabled:true},'form-field-multiple-labels':{enabled:true},'aria-valid-attr-value':{enabled:true},'aria-allowed-attr':{enabled:true}}});
       function axeWcag(tags){for(var t=0;t<tags.length;t++){var m=tags[t].match(/^wcag(\\d)(\\d)(\\d+)$/);if(m)return m[1]+'.'+m[2]+'.'+parseInt(m[3]);}return '';}
       axeRes.violations.forEach(function(v){
         var sev=v.impact||'moderate';
@@ -636,6 +636,71 @@ async function runScan(){
     // Fixed pixel widths
     var fixW2=qsa('*').slice(0,500).filter(function(el){var s=el.getAttribute('style')||'';return/width\\s*:\\s*\\d{4,}px/.test(s);});
     if(fixW2.length)push('minor',fixW2.length+' element(s) with large fixed pixel width','1.4.10','Fixed pixel widths prevent content from reflowing on small screens.','Use relative units (%, vw) instead of fixed pixel widths.',fixW2[0]);
+
+    // ── SUPPLEMENTARY CHECKS (catch what axe misses) ──
+    var axeWcags={};issues.forEach(function(i){if(i.wcag)axeWcags[i.wcag]=true;});
+
+    // 1.1.1 Spacer/tracking images missing alt
+    var spacerMiss=[];
+    qsa('img').forEach(function(img){
+      if(isTrackingPixel(img))return;
+      var role=img.getAttribute('role');
+      if(role==='presentation'||role==='none')return;
+      if(img.getAttribute('aria-hidden')==='true')return;
+      if(!img.hasAttribute('alt')||img.getAttribute('alt').trim()===''){
+        var r=img.getBoundingClientRect();
+        if(r.width<=1&&r.height<=1)return;
+        spacerMiss.push(img);
+        imgs.push({src:img.src||'',srcRaw:(img.getAttribute('src')||'').slice(0,80),missingAlt:!img.hasAttribute('alt')});
+      }
+    });
+    if(spacerMiss.length&&!axeWcags['1.1.1']){ded+=spacerMiss.length<=2?4:spacerMiss.length<=5?7:10;push('critical','Images missing alt text ('+spacerMiss.length+')','1.1.1','Images with no alt attribute are invisible to screen readers.','Add descriptive alt text to each image, or alt="" for decorative images.',spacerMiss[0],spacerMiss.map(function(m){try{return m.src||'';}catch(e){return '';}}),spacerMiss);}
+
+    // 1.3.1 Multiple/conflicting form labels
+    var multiLab=[];
+    qsa('input,select,textarea').forEach(function(inp){
+      if(inp.type==='hidden'||inp.type==='submit'||inp.type==='button'||inp.type==='reset')return;
+      var id=inp.id;var lc=0;
+      if(id){lc=document.querySelectorAll('label[for="'+id+'"]').length;}
+      var wr=inp.closest('label')?1:0;
+      if(lc+wr>1)multiLab.push(inp);
+    });
+    if(multiLab.length){ded+=multiLab.length<=3?3:6;push('serious',multiLab.length+' input(s) with multiple labels','1.3.1','Inputs with multiple labels confuse screen readers about which label applies.','Ensure each input has exactly one associated label.',multiLab[0],null,multiLab);}
+
+    // 4.1.2 Broken ARIA references
+    var brokenR=[];
+    qsa('[aria-labelledby],[aria-describedby]').forEach(function(el){
+      ['aria-labelledby','aria-describedby'].forEach(function(attr){
+        var val=el.getAttribute(attr);
+        if(!val)return;
+        val.trim().split(/\\s+/).forEach(function(refId){
+          if(refId&&!document.getElementById(refId))brokenR.push(el);
+        });
+      });
+    });
+    if(brokenR.length){var uniqR=[];var seenR={};brokenR.forEach(function(el){var k=el.outerHTML.slice(0,80);if(!seenR[k]){seenR[k]=true;uniqR.push(el);}});ded+=uniqR.length<=2?4:7;push('serious',uniqR.length+' broken ARIA reference(s)','4.1.2','aria-labelledby or aria-describedby points to an ID that does not exist on the page.','Ensure referenced IDs exist, or remove the ARIA attribute.',uniqR[0],null,uniqR);}
+
+    // 1.4.3 Color contrast (supplementary — catches what axe misses)
+    if(!axeWcags['1.4.3']){
+      var cFails=[];
+      function getLum(r,g,b){var a=[r,g,b].map(function(v){v/=255;return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4);});return a[0]*0.2126+a[1]*0.7152+a[2]*0.0722;}
+      function parseC(c){var m=c.match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)/);return m?[parseInt(m[1]),parseInt(m[2]),parseInt(m[3])]:null;}
+      function effBg(el){var node=el;while(node&&node!==document.body.parentElement){var cs=window.getComputedStyle(node);var bg=parseC(cs.backgroundColor);if(bg&&cs.backgroundColor!=='transparent'&&cs.backgroundColor!=='rgba(0, 0, 0, 0)')return bg;node=node.parentElement;}return[255,255,255];}
+      var tEls=qsa('p,span,a,li,td,th,label,button,h1,h2,h3,h4,h5,h6,div,strong,em,b,i,small').filter(function(el){var cs=window.getComputedStyle(el);if(cs.display==='none'||cs.visibility==='hidden')return false;var text=el.textContent||'';if(!text.trim())return false;if(el.children.length>0&&el.children[0].textContent===text)return false;return true;}).slice(0,200);
+      tEls.forEach(function(el){
+        var cs=window.getComputedStyle(el);
+        var fg=parseC(cs.color);if(!fg)return;
+        var bg=effBg(el);
+        var L1=getLum(fg[0],fg[1],fg[2]),L2=getLum(bg[0],bg[1],bg[2]);
+        var ratio=(Math.max(L1,L2)+0.05)/(Math.min(L1,L2)+0.05);
+        var fontSize=parseFloat(cs.fontSize);
+        var isBold=parseInt(cs.fontWeight)>=700;
+        var isLarge=fontSize>=24||(isBold&&fontSize>=18.66);
+        var required=isLarge?3:4.5;
+        if(ratio<required)cFails.push({el:el,ratio:ratio.toFixed(2),required:required});
+      });
+      if(cFails.length){ded+=cFails.length<=3?5:cFails.length<=8?8:12;push('serious',cFails.length+' color contrast failure(s)','1.4.3','Text must have '+cFails[0].required+':1 contrast ratio. Found '+cFails[0].ratio+':1.','Increase text color contrast to meet WCAG AA minimums.',cFails[0].el,null,cFails.map(function(c){return c.el;}));}
+    }
   }
 
   // Score calculation — recalibrated (matches api/scan.js)

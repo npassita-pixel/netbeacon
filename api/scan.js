@@ -131,6 +131,98 @@ const AXE_MAPPER_SCRIPT = `
   });
   if (fixedWidth.length) push('1.4.10b','minor','1.4.10',fixedWidth.length+' element(s) with large fixed pixel width','Fixed pixel widths prevent content from reflowing on small screens.',fixedWidth[0]);
 
+  // ── SUPPLEMENTARY CHECKS (catch what axe misses) ──
+  var axeWcags = {};
+  issues.forEach(function(i) { if (i.wcag) axeWcags[i.wcag] = true; });
+
+  // 1.1.1 Spacer/tracking images missing alt
+  function isTrackingPixel(img) {
+    var s = img.getAttribute('src') || '';
+    var w = img.getAttribute('width'), h = img.getAttribute('height');
+    if ((w === '1' || w === 1) && (h === '1' || h === 1)) return true;
+    return ['/pixel/','/track/','/beacon','/collect','adsct','bat.bing','trkn.us','arttrk.','adxcel','bidr.io','ispot.tv','mdhv.io','dmpxs.com'].some(function(p) { return s.includes(p); });
+  }
+  var spacerMiss = [];
+  Array.from(document.querySelectorAll('img')).forEach(function(img) {
+    if (isTrackingPixel(img)) return;
+    var role = img.getAttribute('role');
+    if (role === 'presentation' || role === 'none') return;
+    if (img.getAttribute('aria-hidden') === 'true') return;
+    if (!img.hasAttribute('alt') || img.getAttribute('alt').trim() === '') {
+      var r = img.getBoundingClientRect();
+      if (r.width <= 1 && r.height <= 1) return;
+      spacerMiss.push(img);
+    }
+  });
+  if (spacerMiss.length && !axeWcags['1.1.1']) {
+    ded += spacerMiss.length <= 2 ? 4 : spacerMiss.length <= 5 ? 7 : 10;
+    push('1.1.1s','critical','1.1.1','Images missing alt text (' + spacerMiss.length + ')','Images with no alt attribute are invisible to screen readers.',spacerMiss[0]);
+  }
+
+  // 1.3.1 Multiple/conflicting form labels
+  var multiLab = [];
+  Array.from(document.querySelectorAll('input,select,textarea')).forEach(function(inp) {
+    if (inp.type === 'hidden' || inp.type === 'submit' || inp.type === 'button' || inp.type === 'reset') return;
+    var id = inp.id; var lc = 0;
+    if (id) { lc = document.querySelectorAll('label[for="' + id + '"]').length; }
+    var wr = inp.closest('label') ? 1 : 0;
+    if (lc + wr > 1) multiLab.push(inp);
+  });
+  if (multiLab.length) {
+    ded += multiLab.length <= 3 ? 3 : 6;
+    push('1.3.1m','serious','1.3.1',multiLab.length + ' input(s) with multiple labels','Inputs with multiple labels confuse screen readers about which label applies.',multiLab[0]);
+  }
+
+  // 4.1.2 Broken ARIA references
+  var brokenR = [];
+  Array.from(document.querySelectorAll('[aria-labelledby],[aria-describedby]')).forEach(function(el) {
+    ['aria-labelledby','aria-describedby'].forEach(function(attr) {
+      var val = el.getAttribute(attr);
+      if (!val) return;
+      val.trim().split(/\\s+/).forEach(function(refId) {
+        if (refId && !document.getElementById(refId)) brokenR.push(el);
+      });
+    });
+  });
+  if (brokenR.length) {
+    var uniqR = []; var seenR = {};
+    brokenR.forEach(function(el) { var k = el.outerHTML.slice(0,80); if (!seenR[k]) { seenR[k] = true; uniqR.push(el); } });
+    ded += uniqR.length <= 2 ? 4 : 7;
+    push('4.1.2r','serious','4.1.2',uniqR.length + ' broken ARIA reference(s)','aria-labelledby or aria-describedby points to an ID that does not exist on the page.',uniqR[0]);
+  }
+
+  // 1.4.3 Color contrast (supplementary — catches what axe misses)
+  if (!axeWcags['1.4.3']) {
+    var cFails = [];
+    function getLum(r,g,b) { var a = [r,g,b].map(function(v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.0722; }
+    function parseC(c) { var m = c.match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)/); return m ? [parseInt(m[1]), parseInt(m[2]), parseInt(m[3])] : null; }
+    function effBg(el) { var node = el; while (node && node !== document.body.parentElement) { var cs = window.getComputedStyle(node); var bg = parseC(cs.backgroundColor); if (bg && cs.backgroundColor !== 'transparent' && cs.backgroundColor !== 'rgba(0, 0, 0, 0)') return bg; node = node.parentElement; } return [255,255,255]; }
+    var tEls = Array.from(document.querySelectorAll('p,span,a,li,td,th,label,button,h1,h2,h3,h4,h5,h6,div,strong,em,b,i,small')).filter(function(el) {
+      var cs = window.getComputedStyle(el);
+      if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+      var text = el.textContent || '';
+      if (!text.trim()) return false;
+      if (el.children.length > 0 && el.children[0].textContent === text) return false;
+      return true;
+    }).slice(0,200);
+    tEls.forEach(function(el) {
+      var cs = window.getComputedStyle(el);
+      var fg = parseC(cs.color); if (!fg) return;
+      var bg = effBg(el);
+      var L1 = getLum(fg[0],fg[1],fg[2]), L2 = getLum(bg[0],bg[1],bg[2]);
+      var ratio = (Math.max(L1,L2) + 0.05) / (Math.min(L1,L2) + 0.05);
+      var fontSize = parseFloat(cs.fontSize);
+      var isBold = parseInt(cs.fontWeight) >= 700;
+      var isLarge = fontSize >= 24 || (isBold && fontSize >= 18.66);
+      var required = isLarge ? 3 : 4.5;
+      if (ratio < required) cFails.push({ el: el, ratio: ratio.toFixed(2), required: required });
+    });
+    if (cFails.length) {
+      ded += cFails.length <= 3 ? 5 : cFails.length <= 8 ? 8 : 12;
+      push('1.4.3s','serious','1.4.3',cFails.length + ' color contrast failure(s)','Text must have ' + cFails[0].required + ':1 contrast ratio. Found ' + cFails[0].ratio + ':1.',cFails[0].el);
+    }
+  }
+
   // Score calculation (bookmarklet-aligned)
   var critCount = issues.filter(function(i) { return i.sev === 'critical'; }).length;
   var serCount  = issues.filter(function(i) { return i.sev === 'serious'; }).length;
@@ -590,15 +682,31 @@ module.exports = async function handler(req, res) {
       timeout: 20000,
     });
 
-    // Wait for dynamic content
-    await new Promise(r => setTimeout(r, 1500));
+    // Wait for dynamic content + CSS/fonts to fully load
+    await new Promise(r => setTimeout(r, 2000));
+    await page.evaluate(() => new Promise(resolve => {
+      if (document.readyState === 'complete') return resolve();
+      window.addEventListener('load', resolve);
+      setTimeout(resolve, 3000);
+    }));
+    // Extra delay for web fonts and late CSS
+    await new Promise(r => setTimeout(r, 1000));
 
     // Inject axe-core into the page and run it
     let axeInjected = false;
     try {
       await page.evaluate(axeCore.source);
       const axeResults = await page.evaluate(() => {
-        return axe.run(document, { resultTypes: ['violations', 'passes', 'incomplete'] });
+        return axe.run(document, {
+          runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa', 'best-practice'] },
+          rules: {
+            'color-contrast': { enabled: true },
+            'image-alt': { enabled: true },
+            'form-field-multiple-labels': { enabled: true },
+            'aria-valid-attr-value': { enabled: true },
+            'aria-allowed-attr': { enabled: true }
+          }
+        });
       });
       await page.evaluate((results) => { window.__axeResults = results; }, axeResults);
       axeInjected = true;
