@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@sparticuz/chromium": "^143.0.4",
+    "axe-core": "^4.11.1",
     "puppeteer-core": "^24.39.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"

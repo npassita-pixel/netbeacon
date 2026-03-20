@@ -184,7 +184,8 @@ footer span{color:var(--accent2)}
   </div>
 
   <footer>
-    Built by <span>Beacon</span> &middot; WCAG 2.1 AA + 2.2 &middot; Open-source accessibility scanner
+    Built by <span>Beacon</span> &middot; WCAG 2.1 AA + 2.2 &middot; Open-source accessibility scanner<br>
+    Core accessibility checks powered by axe-core&reg; by Deque Systems
   </footer>
 </main></div>
 
@@ -268,7 +269,7 @@ document.body.appendChild(pan);
 document.getElementById('bp-close').onclick=function(){pan.style.display='none';ov.style.display='none';};
 ov.onclick=function(){pan.style.display='none';ov.style.display='none';};
 
-function runScan(){
+async function runScan(){
   var ded=0;
   var beaconPanel=document.getElementById('beacon-panel');
   var beaconOverlay=document.getElementById('beacon-overlay');
@@ -292,7 +293,44 @@ function runScan(){
     return['/pixel/','/track/','/beacon','/collect','adsct','bat.bing','trkn.us','arttrk.','adxcel','bidr.io','ispot.tv','mdhv.io','dmpxs.com'].some(function(p){return s.includes(p);});
   }
 
-  // 1.1.1 Alt text
+  // ── AXE-CORE INTEGRATION ──
+  document.getElementById('bp-scan-txt').textContent='Loading axe-core\\u2026';
+  var __axeRan=false;
+  try{
+    if(typeof axe==='undefined'){
+      var axeS=document.createElement('script');
+      axeS.src='https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.10.2/axe.min.js';
+      document.head.appendChild(axeS);
+      await new Promise(function(res,rej){var done=false;axeS.onload=function(){if(!done){done=true;res();}};axeS.onerror=function(){if(!done){done=true;rej();}};setTimeout(function(){if(!done){done=true;rej();}},10000);});
+    }
+    __axeRan=true;
+  }catch(e){}
+  if(__axeRan&&typeof axe!=='undefined'){
+    document.getElementById('bp-scan-txt').textContent='Running axe-core\\u2026';
+    try{
+      var axeRes=await axe.run(document,{exclude:[['#beacon-panel'],['#beacon-overlay']]});
+      function axeWcag(tags){for(var t=0;t<tags.length;t++){var m=tags[t].match(/^wcag(\\d)(\\d)(\\d+)$/);if(m)return m[1]+'.'+m[2]+'.'+parseInt(m[3]);}return '';}
+      axeRes.violations.forEach(function(v){
+        var sev=v.impact||'moderate';
+        var wcag=axeWcag(v.tags)||v.id;
+        var nd=v.nodes[0];var snippet=nd?(nd.html||'').slice(0,120):'';
+        var imgSrc='',extraImgSrcs=[],allInst=[];
+        if(/^<img /i.test(snippet)){var sm=snippet.match(/src=["']([^"']+)["']/i);if(sm)imgSrc=sm[1];}
+        if(v.nodes.length>1){v.nodes.slice(0,20).forEach(function(n){var h=(n.html||'').slice(0,120);var iS='';if(/^<img /i.test(h)){var ns=h.match(/src=["']([^"']+)["']/i);if(ns){iS=ns[1];extraImgSrcs.push(ns[1]);}}allInst.push({el:h,imgSrc:iS});});}
+        if(v.id==='image-alt'){v.nodes.forEach(function(n){var h=n.html||'';var ns=h.match(/src=["']([^"']+)["']/i);var src=ns?ns[1]:'';imgs.push({src:src,srcRaw:src.slice(0,80),missingAlt:!/\\balt=/.test(h)});});}
+        if(sev==='critical')ded+=v.nodes.length<=2?5:v.nodes.length<=5?8:10;
+        else if(sev==='serious')ded+=v.nodes.length<=2?4:v.nodes.length<=5?6:8;
+        else if(sev==='moderate')ded+=v.nodes.length<=3?2:4;
+        else ded+=1;
+        issues.push({sev:sev,title:v.help+(v.nodes.length>1?' ('+v.nodes.length+')':''),wcag:wcag,desc:v.description,fix:v.help+'.',el:snippet,imgSrc:imgSrc,imgSrcs:extraImgSrcs,instances:allInst});
+      });
+      axeRes.passes.forEach(function(p){var wcag=axeWcag(p.tags)||p.id;pass(p.help,wcag);});
+    }catch(axeErr){__axeRan=false;}
+  }
+  document.getElementById('bp-scan-txt').textContent='Running checks\\u2026';
+
+  if(!__axeRan){
+  // 1.1.1 Alt text (fallback — runs only if axe-core unavailable)
   var allImgs=document.querySelectorAll('img');
   var miss=[],decoImgs=[];
   Array.from(allImgs).forEach(function(img){
@@ -552,6 +590,53 @@ function runScan(){
   // 1.4.10 Fixed pixel widths
   var fixedWidth=qsa('*').slice(0,500).filter(function(el){var s=el.getAttribute('style')||'';return/width\\s*:\\s*\\d{4,}px/.test(s);});
   if(fixedWidth.length)push('minor',fixedWidth.length+' element(s) with large fixed pixel width','1.4.10','Fixed pixel widths prevent content from reflowing on small screens.','Use relative units (%, vw) instead of fixed pixel widths.',fixedWidth[0]);
+  } // end fallback (original checks)
+
+  // ── CUSTOM CHECKS (always run when axe active — axe does NOT cover these) ──
+  if(__axeRan){
+    // 1.4.1 Color-only link detection
+    var colorLinks2=qsa('a').filter(function(a){var s=window.getComputedStyle(a);return s.textDecoration.indexOf('underline')===-1&&s.fontWeight<700;});
+    if(colorLinks2.length>5){ded+=3;push('moderate','Links may rely on color alone ('+colorLinks2.length+')','1.4.1','Links should be distinguishable without color (underline or bold).','Add text-decoration: underline or another visual cue.',colorLinks2[0],null,colorLinks2);}
+    else pass('Links are visually distinguishable','1.4.1');
+
+    // 1.4.10 Horizontal scrolling
+    if(document.body.scrollWidth>window.innerWidth+10){ded+=3;push('moderate','Horizontal scrolling detected','1.4.10','Content should reflow at 320px width without horizontal scroll.','Use responsive CSS and avoid fixed pixel widths.',null);}
+    else pass('No horizontal scroll at current width','1.4.10');
+
+    // 2.3.3 prefers-reduced-motion
+    var hasMotionQ=false;
+    try{Array.from(document.styleSheets).forEach(function(sheet){try{Array.from(sheet.cssRules||[]).forEach(function(rule){if(rule.conditionText&&rule.conditionText.includes('prefers-reduced-motion'))hasMotionQ=true;});}catch(e){}});}catch(e){}
+    var hasAnim=qsa('*').slice(0,200).some(function(el){try{var s=window.getComputedStyle(el);return s.animationName!=='none';}catch(e){return false;}});
+    if(hasAnim&&!hasMotionQ){ded+=3;push('moderate','No prefers-reduced-motion media query','2.3.3','Animations should respect user motion preferences (WCAG 2.2).','Add @media (prefers-reduced-motion: reduce) to disable animations.',null);}
+    else if(hasMotionQ)pass('prefers-reduced-motion supported','2.3.3');
+
+    // 2.4.4 target=_blank without warning
+    var blankL=qsa('a[target="_blank"]').filter(function(a){return!(a.getAttribute('aria-label')||'').includes('new')&&!(a.textContent||'').includes('new window');});
+    if(blankL.length>2){ded+=2;push('minor',blankL.length+' links open new tab without warning','2.4.4','Users should be warned when links open in a new tab.','Add aria-label or text indicating "opens in new tab".',blankL[0],null,blankL);}
+
+    // 2.4.11 Focus indicator detection
+    var focusEls2=qsa('a,button,[tabindex="0"]').slice(0,30);
+    var hiddenFoc=focusEls2.filter(function(el){try{var cs=window.getComputedStyle(el);var ow=parseFloat(cs.outlineWidth);var os=cs.outlineStyle;var shadow=cs.boxShadow;return(ow===0||os==='none')&&(!shadow||shadow==='none');}catch(e){return false;}});
+    if(hiddenFoc.length>=3){ded+=5;push('serious','Focus indicator hidden ('+hiddenFoc.length+' elements)','2.4.11','outline:none without replacement makes keyboard navigation invisible.','Restore outline or add a visible :focus style.',hiddenFoc[0],null,hiddenFoc);}
+    else pass('Focus indicators appear visible','2.4.11');
+
+    // 2.5.8 Touch target size
+    var smallT=qsa('a,button,[role=button],[role=link]').filter(function(el){var r=el.getBoundingClientRect();return r.width>0&&r.height>0&&(r.width<24||r.height<24);});
+    if(smallT.length){ded+=smallT.length<=3?3:5;push('moderate',smallT.length+' small touch target(s)','2.5.8','Interactive elements should be at least 24x24px (WCAG 2.2).','Increase padding or min-width/min-height to 24px.',smallT[0],null,smallT);}
+    else pass('Touch targets meet minimum size','2.5.8');
+
+    // Sticky/fixed elements
+    var sticky2=qsa('*').slice(0,500).filter(function(el){try{var p=window.getComputedStyle(el).position;return p==='sticky'||p==='fixed';}catch(e){return false;}});
+    if(sticky2.length>2)push('minor',sticky2.length+' sticky/fixed element(s)','2.4.11','Sticky elements may obstruct content for zoom users.','Ensure sticky elements do not obscure content when zoomed.',sticky2[0],null,sticky2);
+
+    // High interactive element count
+    var inter2=qsa('a,button,input,select,textarea,[role=button],[role=link],[onclick]');
+    if(inter2.length>60)push('minor','High interactive element count ('+inter2.length+')','3.2.4','Pages with 60+ interactive elements may overwhelm users.','Consider simplifying the page or breaking into sections.',null);
+
+    // Fixed pixel widths
+    var fixW2=qsa('*').slice(0,500).filter(function(el){var s=el.getAttribute('style')||'';return/width\\s*:\\s*\\d{4,}px/.test(s);});
+    if(fixW2.length)push('minor',fixW2.length+' element(s) with large fixed pixel width','1.4.10','Fixed pixel widths prevent content from reflowing on small screens.','Use relative units (%, vw) instead of fixed pixel widths.',fixW2[0]);
+  }
 
   // Score calculation — recalibrated (matches api/scan.js)
   var critCount=issues.filter(function(i){return i.sev==='critical';}).length;
@@ -658,6 +743,7 @@ function runScan(){
     h+='<div class="bp-section">Passing ('+passes.length+')</div>';
     passes.forEach(function(p){h+='<div class="bp-pass"><span>v</span><span style="flex:1">'+p.t+'</span><span style="font-size:10px;color:#16a34a;font-weight:700">'+p.w+'</span></div>';});
   }
+  h+='<div style="text-align:center;padding:16px 20px 8px;font-size:10px;color:#94a3b8;border-top:1px solid #f1f5f9;margin-top:12px">Core accessibility checks powered by axe-core\\u00AE by Deque Systems</div>';
   bod.innerHTML=h;
   setTimeout(function(){var bar=document.getElementById('bp-score-bar');if(bar)bar.style.width=score+'%';},100);
   // Show action buttons
@@ -754,7 +840,7 @@ function openReport(){
     doc+='<div class="sec">\\u2705 Checks Passed ('+passes.length+')</div>';
     passes.forEach(function(p){doc+='<div class="pass"><span>\\u2713</span><span style="flex:1">'+esc(p.t)+'</span><span style="color:#0D7A3E;font-size:11px;font-weight:600">'+esc(p.w)+'</span></div>';});
   }
-  doc+='<div class="footer"><div>Generated by Beacon Scanner \\u2014 '+date+' \\u2014 Automated scan covering WCAG 2.1 AA, WCAG 2.2, ADA Title III &amp; Section 508. Manual testing recommended for full compliance.</div></div>';
+  doc+='<div class="footer"><div>Generated by Beacon Scanner \\u2014 '+date+' \\u2014 Automated scan covering WCAG 2.1 AA, WCAG 2.2, ADA Title III &amp; Section 508. Manual testing recommended for full compliance.<br>Core accessibility checks powered by axe-core\\u00AE by Deque Systems</div></div>';
   doc+='</div></body></html>';
   try{
     var blob=new Blob([doc],{type:'text/html'});
@@ -772,8 +858,9 @@ function doRescan(){
   document.getElementById('bp-scanning').style.display='flex';
   document.getElementById('bp-actions').classList.remove('visible');
   setTimeout(function(){
-    runScan();
-    if(btn)btn.classList.remove('scanning');
+    runScan().then(function(){
+      if(btn)btn.classList.remove('scanning');
+    });
   },300);
 }
 

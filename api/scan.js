@@ -3,8 +3,175 @@
 
 const chromium = require('@sparticuz/chromium');
 const puppeteer = require('puppeteer-core');
+const axeCore = require('axe-core');
 
-// ── WCAG checks injected into headless page (bookmarklet-aligned) ───────────
+// ── Axe-core result mapper + custom checks ──────────────────────────────────
+const AXE_MAPPER_SCRIPT = `
+(function() {
+  var issues = [];
+  var passes = [];
+  var ded = 0;
+
+  function push(id, sev, wcag, title, detail, el) {
+    var snippet = '';
+    var imgSrc = '';
+    if (el) {
+      try { snippet = el.outerHTML ? el.outerHTML.slice(0,120) : ''; } catch(e) {}
+      if (el.tagName === 'IMG') { try { imgSrc = el.src || ''; } catch(e) {} }
+    }
+    issues.push({ id: id, sev: sev, wcag: wcag, title: title, detail: detail, snippet: snippet, imgSrc: imgSrc });
+  }
+  function pass(id, title) { passes.push({ id: id, title: title }); }
+
+  // Map axe-core results (window.__axeResults set by runner)
+  var axeRes = window.__axeResults;
+  if (axeRes) {
+    function axeWcag(tags) {
+      for (var t = 0; t < tags.length; t++) {
+        var m = tags[t].match(/^wcag(\\d)(\\d)(\\d+)$/);
+        if (m) return m[1] + '.' + m[2] + '.' + parseInt(m[3]);
+      }
+      return '';
+    }
+    axeRes.violations.forEach(function(v) {
+      var sev = v.impact || 'moderate';
+      var wcag = axeWcag(v.tags) || v.id;
+      var nd = v.nodes[0]; var snippet = nd ? (nd.html || '').slice(0,120) : '';
+      var imgSrc = '';
+      if (/^<img /i.test(snippet)) {
+        var sm = snippet.match(/src=["']([^"']+)["']/i);
+        if (sm) imgSrc = sm[1];
+      }
+      if (sev === 'critical') ded += v.nodes.length <= 2 ? 5 : v.nodes.length <= 5 ? 8 : 10;
+      else if (sev === 'serious') ded += v.nodes.length <= 2 ? 4 : v.nodes.length <= 5 ? 6 : 8;
+      else if (sev === 'moderate') ded += v.nodes.length <= 3 ? 2 : 4;
+      else ded += 1;
+      issues.push({ id: v.id, sev: sev, wcag: wcag, title: v.help + (v.nodes.length > 1 ? ' (' + v.nodes.length + ')' : ''), detail: v.description, snippet: snippet, imgSrc: imgSrc });
+    });
+    axeRes.passes.forEach(function(p) {
+      var wcag = axeWcag(p.tags) || p.id;
+      pass(p.id, p.help);
+    });
+  }
+
+  // ── CUSTOM CHECKS (axe-core does NOT cover these) ──
+
+  // 1.4.1 Color only
+  var colorLinks = Array.from(document.querySelectorAll('a')).filter(function(a) {
+    var s = window.getComputedStyle(a);
+    return s.textDecoration.indexOf('underline') === -1 && s.fontWeight < 700;
+  });
+  if (colorLinks.length > 5) { ded += 3; push('1.4.1','moderate','1.4.1','Links may rely on color alone ('+colorLinks.length+')','Links should be distinguishable without color (underline or bold).',colorLinks[0]); }
+  else pass('1.4.1','Links are visually distinguishable');
+
+  // 1.4.10 Horizontal scroll
+  if (document.body.scrollWidth > window.innerWidth + 10)
+  { ded += 3; push('1.4.10','moderate','1.4.10','Horizontal scrolling detected','Content should reflow at 320px width without horizontal scroll.',null); }
+  else pass('1.4.10','No horizontal scroll at current width');
+
+  // 2.3.3 Reduced motion
+  var hasMotionQuery = false;
+  try {
+    Array.from(document.styleSheets).forEach(function(sheet) {
+      try {
+        Array.from(sheet.cssRules || []).forEach(function(rule) {
+          if (rule.conditionText && rule.conditionText.includes('prefers-reduced-motion')) hasMotionQuery = true;
+        });
+      } catch(e) {}
+    });
+  } catch(e) {}
+  var hasAnimations = Array.from(document.querySelectorAll('*')).slice(0,200).some(function(el) {
+    try { var s = window.getComputedStyle(el); return s.animationName !== 'none'; } catch(e) { return false; }
+  });
+  if (hasAnimations && !hasMotionQuery) { ded += 3; push('2.3.3','moderate','2.3.3','No prefers-reduced-motion media query','Animations should respect user motion preferences (WCAG 2.2).',null); }
+  else if (hasMotionQuery) pass('2.3.3','prefers-reduced-motion supported');
+
+  // 2.4.4 target=_blank without warning
+  var blankLinks = Array.from(document.querySelectorAll('a[target="_blank"]')).filter(function(a) {
+    return !(a.getAttribute('aria-label') || '').includes('new') && !(a.textContent || '').includes('new window');
+  });
+  if (blankLinks.length > 2) { ded += 2; push('2.4.4b','minor','2.4.4',blankLinks.length+' links open new tab without warning','Users should be warned when links open in a new tab.',blankLinks[0]); }
+
+  // 2.4.11 Focus indicators
+  var focusEls = Array.from(document.querySelectorAll('a,button,[tabindex="0"]')).slice(0,30);
+  var hiddenFocus = focusEls.filter(function(el) {
+    try {
+      var cs = window.getComputedStyle(el);
+      var ow = parseFloat(cs.outlineWidth);
+      var os = cs.outlineStyle;
+      var shadow = cs.boxShadow;
+      return (ow === 0 || os === 'none') && (!shadow || shadow === 'none');
+    } catch(e) { return false; }
+  });
+  if (hiddenFocus.length >= 3) { ded += 5; push('2.4.11','serious','2.4.11','Focus indicator hidden ('+hiddenFocus.length+' elements)','outline:none without replacement makes keyboard navigation invisible.',hiddenFocus[0]); }
+  else pass('2.4.11','Focus indicators appear visible');
+
+  // 2.5.8 Touch targets
+  var smallTargets = Array.from(document.querySelectorAll('a,button,[role=button],[role=link]')).filter(function(el) {
+    var r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && (r.width < 24 || r.height < 24);
+  });
+  if (smallTargets.length) { ded += smallTargets.length <= 3 ? 3 : 5; push('2.5.8','moderate','2.5.8',smallTargets.length+' small touch target(s)','Interactive elements should be at least 24x24px (WCAG 2.2).',smallTargets[0]); }
+  else pass('2.5.8','Touch targets meet minimum size');
+
+  // 2.4.11 Sticky elements
+  var sticky = Array.from(document.querySelectorAll('*')).slice(0,500).filter(function(el) {
+    try { var p = window.getComputedStyle(el).position; return p === 'sticky' || p === 'fixed'; } catch(e) { return false; }
+  });
+  if (sticky.length > 2) push('2.4.11b','minor','2.4.11',sticky.length+' sticky/fixed element(s)','Sticky elements may obstruct content for zoom users.',sticky[0]);
+
+  // Cognitive load
+  var interactive = document.querySelectorAll('a,button,input,select,textarea,[role=button],[role=link],[onclick]');
+  if (interactive.length > 60) push('cog','minor','3.2.4','High interactive element count ('+interactive.length+')','Pages with 60+ interactive elements may overwhelm users.',null);
+
+  // 1.4.10 Fixed pixel widths
+  var fixedWidth = Array.from(document.querySelectorAll('*')).slice(0,500).filter(function(el) {
+    var s = el.getAttribute('style') || '';
+    return /width\\s*:\\s*\\d{4,}px/.test(s);
+  });
+  if (fixedWidth.length) push('1.4.10b','minor','1.4.10',fixedWidth.length+' element(s) with large fixed pixel width','Fixed pixel widths prevent content from reflowing on small screens.',fixedWidth[0]);
+
+  // Score calculation (bookmarklet-aligned)
+  var critCount = issues.filter(function(i) { return i.sev === 'critical'; }).length;
+  var serCount  = issues.filter(function(i) { return i.sev === 'serious'; }).length;
+  var totalChecks = issues.length + passes.length;
+  var passRatio = totalChecks > 0 ? passes.length / totalChecks : 0;
+  var rawScore = 100 - ded + (passRatio * 15);
+  if      (critCount >= 3) rawScore = Math.min(rawScore, 30);
+  else if (critCount >= 2) rawScore = Math.min(rawScore, 45);
+  else if (critCount === 1) rawScore = Math.min(rawScore, 62);
+  else if (serCount  >= 3) rawScore = Math.min(rawScore, 70);
+  else if (serCount  >= 1) rawScore = Math.min(rawScore, 82);
+  var score = Math.max(0, Math.min(issues.length > 0 ? 99 : 100, Math.round(rawScore)));
+
+  // Image counting
+  var allImgs = document.querySelectorAll('img');
+  var totalImages = 0;
+  var missingAltImages = [];
+  Array.from(allImgs).forEach(function(img) {
+    var s = img.getAttribute('src') || '';
+    var w = img.getAttribute('width'), h = img.getAttribute('height');
+    if ((w === '1' || w === 1) && (h === '1' || h === 1)) return;
+    if (['/pixel/','/track/','/beacon','/collect','adsct','bat.bing','trkn.us','arttrk.','adxcel','bidr.io'].some(function(p) { return s.includes(p); })) return;
+    var role = img.getAttribute('role');
+    if (role === 'presentation' || role === 'none') return;
+    totalImages++;
+    if (!img.hasAttribute('alt') || img.getAttribute('alt').trim() === '') {
+      missingAltImages.push({
+        index: missingAltImages.length + 1,
+        src: img.src || '',
+        srcRaw: (img.getAttribute('src') || '').slice(0, 80),
+        missingAlt: !img.hasAttribute('alt'),
+        snippet: img.outerHTML ? img.outerHTML.slice(0, 250) : ''
+      });
+    }
+  });
+
+  return { issues: issues, passes: passes, score: score, images: { total: totalImages, missing: missingAltImages } };
+})();
+`;
+
+// ── FALLBACK: original WCAG checks (runs only if axe-core injection fails) ──
 const SCANNER_SCRIPT = `
 (function() {
   var issues = [];
@@ -426,13 +593,32 @@ module.exports = async function handler(req, res) {
     // Wait for dynamic content
     await new Promise(r => setTimeout(r, 1500));
 
-    const result = await page.evaluate(SCANNER_SCRIPT);
+    // Inject axe-core into the page and run it
+    let axeInjected = false;
+    try {
+      await page.evaluate(axeCore.source);
+      const axeResults = await page.evaluate(() => {
+        return axe.run(document, { resultTypes: ['violations', 'passes', 'incomplete'] });
+      });
+      await page.evaluate((results) => { window.__axeResults = results; }, axeResults);
+      axeInjected = true;
+    } catch (axeErr) {
+      // axe-core injection failed — fall back to original scanner
+    }
+
+    let result;
+    if (axeInjected) {
+      result = await page.evaluate(AXE_MAPPER_SCRIPT);
+    } else {
+      result = await page.evaluate(SCANNER_SCRIPT);
+    }
 
     return res.status(200).json({
       url: parsedUrl.href,
       scannedAt: new Date().toISOString(),
       scanType: 'headless',
       standards: ['WCAG 2.1 AA', 'WCAG 2.2', 'ADA Title III', 'Section 508'],
+      attribution: 'Core accessibility checks powered by axe-core® by Deque Systems',
       ...result
     });
 
