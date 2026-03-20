@@ -297,9 +297,9 @@ function runScan(){
   var miss=[],decoImgs=[];
   Array.from(allImgs).forEach(function(img){
     if(isBeaconEl(img))return;
-    if(isTrackingPixel(img))return;
     var role=img.getAttribute('role');
     if(role==='presentation'||role==='none')return;
+    if(img.getAttribute('aria-hidden')==='true')return;
     if(!img.hasAttribute('alt')){miss.push(img);imgs.push({src:img.src,srcRaw:(img.getAttribute('src')||'').slice(0,80),missingAlt:true});}
     else if(img.getAttribute('alt').trim()===''){decoImgs.push(img);imgs.push({src:img.src,srcRaw:(img.getAttribute('src')||'').slice(0,80),missingAlt:false});}
   });
@@ -338,6 +338,30 @@ function runScan(){
   if(inputs.length){ded+=inputs.length<=2?6:10;push('critical',inputs.length+' unlabeled form input(s)','1.3.1','Form fields must have associated labels for screen readers.','Add a <label for="id"> or aria-label to each input.',inputs[0],null,inputs);}
   else pass('All form inputs have labels','1.3.1');
 
+  // 1.3.1 Multiple/conflicting form labels
+  var multiLabeled=[];
+  qsa('input,select,textarea').forEach(function(inp){
+    if(inp.type==='hidden'||inp.type==='submit'||inp.type==='button'||inp.type==='reset')return;
+    var id=inp.id;var labelCount=0;
+    if(id){labelCount=document.querySelectorAll('label[for="'+id+'"]').length;}
+    var wrapped=inp.closest('label')?1:0;
+    if(labelCount+wrapped>1)multiLabeled.push(inp);
+  });
+  if(multiLabeled.length){ded+=multiLabeled.length<=3?3:6;push('serious',multiLabeled.length+' input(s) with multiple labels','1.3.1','Inputs with multiple labels confuse screen readers about which label applies.','Ensure each input has exactly one associated label.',multiLabeled[0],null,multiLabeled);}
+
+  // 4.1.2 Broken ARIA references
+  var brokenRefs=[];
+  qsa('[aria-labelledby],[aria-describedby]').forEach(function(el){
+    ['aria-labelledby','aria-describedby'].forEach(function(attr){
+      var val=el.getAttribute(attr);
+      if(!val)return;
+      val.trim().split(/\\s+/).forEach(function(refId){
+        if(refId&&!document.getElementById(refId))brokenRefs.push(el);
+      });
+    });
+  });
+  if(brokenRefs.length){var unique=[];var seen={};brokenRefs.forEach(function(el){var k=el.outerHTML.slice(0,80);if(!seen[k]){seen[k]=true;unique.push(el);}});ded+=unique.length<=2?4:7;push('serious',unique.length+' broken ARIA reference(s)','4.1.2','aria-labelledby or aria-describedby points to an ID that does not exist on the page.','Ensure referenced IDs exist, or remove the ARIA attribute.',unique[0],null,unique);}
+
   // 1.4.1 Color only
   var colorLinks=qsa('a').filter(function(a){
     var s=window.getComputedStyle(a);
@@ -356,7 +380,7 @@ function runScan(){
   function getLuminance(r,g,b){var a=[r,g,b].map(function(v){v/=255;return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4);});return a[0]*0.2126+a[1]*0.7152+a[2]*0.0722;}
   function parseColor(c){var m=c.match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)/);return m?[parseInt(m[1]),parseInt(m[2]),parseInt(m[3])]:null;}
   function effectiveBg(el){var node=el;while(node&&node!==document.body.parentElement){var cs=window.getComputedStyle(node);var bg=parseColor(cs.backgroundColor);if(bg&&cs.backgroundColor!=='transparent'&&cs.backgroundColor!=='rgba(0, 0, 0, 0)')return bg;node=node.parentElement;}return[255,255,255];}
-  var textEls=qsa('p,span,a,li,td,th,label,button,h1,h2,h3,h4,h5,h6').filter(function(el){var cs=window.getComputedStyle(el);return cs.display!=='none'&&cs.visibility!=='hidden';}).slice(0,80);
+  var textEls=qsa('p,span,a,li,td,th,label,button,h1,h2,h3,h4,h5,h6,div,strong,em,b,i,small,blockquote,figcaption,cite,dt,dd').filter(function(el){var cs=window.getComputedStyle(el);if(cs.display==='none'||cs.visibility==='hidden')return false;var text=el.textContent||'';if(!text.trim())return false;if(el.children.length>0&&el.children[0].textContent===text)return false;return true;}).slice(0,200);
   textEls.forEach(function(el){
     var cs=window.getComputedStyle(el);
     var fg=parseColor(cs.color);if(!fg)return;

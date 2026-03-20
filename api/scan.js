@@ -33,9 +33,9 @@ const SCANNER_SCRIPT = `
   var imgs = document.querySelectorAll('img');
   var miss = [], decorativeImgs = [];
   Array.from(imgs).forEach(function(img) {
-    if (isTrackingPixel(img)) return;
     var role = img.getAttribute('role');
     if (role === 'presentation' || role === 'none') return;
+    if (img.getAttribute('aria-hidden') === 'true') return;
     if (!img.hasAttribute('alt')) miss.push(img);
     else if (img.getAttribute('alt').trim() === '') decorativeImgs.push(img);
   });
@@ -74,6 +74,30 @@ const SCANNER_SCRIPT = `
   if (inputs.length) { ded += inputs.length<=2?6:10; push('1.3.1d','critical','1.3.1',inputs.length+' unlabeled form input(s)','Form fields must have associated labels for screen readers.',inputs[0]); }
   else pass('1.3.1d','All form inputs have labels');
 
+  // 1.3.1 Multiple/conflicting form labels
+  var multiLabeled = [];
+  Array.from(document.querySelectorAll('input,select,textarea')).forEach(function(inp) {
+    if (inp.type==='hidden'||inp.type==='submit'||inp.type==='button'||inp.type==='reset') return;
+    var id = inp.id; var labelCount = 0;
+    if (id) labelCount = document.querySelectorAll('label[for="'+id+'"]').length;
+    var wrapped = inp.closest('label') ? 1 : 0;
+    if (labelCount + wrapped > 1) multiLabeled.push(inp);
+  });
+  if (multiLabeled.length) { ded += multiLabeled.length<=3?3:6; push('1.3.1e','serious','1.3.1',multiLabeled.length+' input(s) with multiple labels','Inputs with multiple labels confuse screen readers about which label applies.',multiLabeled[0]); }
+
+  // 4.1.2 Broken ARIA references
+  var brokenRefs = [];
+  Array.from(document.querySelectorAll('[aria-labelledby],[aria-describedby]')).forEach(function(el) {
+    ['aria-labelledby','aria-describedby'].forEach(function(attr) {
+      var val = el.getAttribute(attr);
+      if (!val) return;
+      val.trim().split(/\s+/).forEach(function(refId) {
+        if (refId && !document.getElementById(refId)) brokenRefs.push(el);
+      });
+    });
+  });
+  if (brokenRefs.length) { var unique=[],seen={}; brokenRefs.forEach(function(el){var k=(el.outerHTML||'').slice(0,80);if(!seen[k]){seen[k]=true;unique.push(el);}}); ded+=unique.length<=2?4:7; push('4.1.2','serious','4.1.2',unique.length+' broken ARIA reference(s)','aria-labelledby or aria-describedby points to an ID that does not exist.',unique[0]); }
+
   // 1.4.1 Color only
   var colorLinks = Array.from(document.querySelectorAll('a')).filter(function(a){
     var s = window.getComputedStyle(a);
@@ -107,10 +131,14 @@ const SCANNER_SCRIPT = `
     }
     return [255, 255, 255];
   }
-  var textEls = Array.from(document.querySelectorAll('p,span,a,li,td,th,label,button,h1,h2,h3,h4,h5,h6')).filter(function(el){
+  var textEls = Array.from(document.querySelectorAll('p,span,a,li,td,th,label,button,h1,h2,h3,h4,h5,h6,div,strong,em,b,i,small,blockquote,figcaption,cite,dt,dd')).filter(function(el){
     var cs = window.getComputedStyle(el);
-    return cs.display !== 'none' && cs.visibility !== 'hidden';
-  }).slice(0,80);
+    if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+    var text = el.textContent || '';
+    if (!text.trim()) return false;
+    if (el.children.length > 0 && el.children[0].textContent === text) return false;
+    return true;
+  }).slice(0,200);
   textEls.forEach(function(el){
     var cs = window.getComputedStyle(el);
     var fg=parseColor(cs.color);

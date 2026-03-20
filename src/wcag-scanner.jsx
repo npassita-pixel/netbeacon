@@ -105,10 +105,10 @@ function runLocalScan(doc, baseUrl) {
   try {
     const miss = [], decorative = [];
     doc.querySelectorAll("img").forEach(img => {
-      if (isTrackingPixel(img)) return;
       if (hasAriaHiddenAncestor(img)) return;
       const role = img.getAttribute("role");
       if (role === "presentation" || role === "none") return;
+      if (img.getAttribute("aria-hidden") === "true") return;
       if (!img.hasAttribute("alt")) miss.push(img);
       else if (img.getAttribute("alt").trim() === "") decorative.push(img);
     });
@@ -150,6 +150,39 @@ function runLocalScan(doc, baseUrl) {
     else if (inputs.length) pass("All form inputs are labeled", "1.3.1");
   } catch(e) {}
 
+  // 1.3.1 Multiple/conflicting form labels
+  try {
+    const allInputs = Array.from(doc.querySelectorAll("input:not([type=hidden]):not([type=submit]):not([type=button]):not([type=reset]),select,textarea"));
+    const multiLabeled = allInputs.filter(inp => {
+      const id = inp.getAttribute("id");
+      let labelCount = 0;
+      if (id) labelCount = doc.querySelectorAll(`label[for="${id}"]`).length;
+      const wrapped = inp.closest("label") ? 1 : 0;
+      return (labelCount + wrapped) > 1;
+    });
+    if (multiLabeled.length) { ded += multiLabeled.length <= 3 ? 3 : 6; push("serious", `Inputs with multiple labels (${multiLabeled.length})`, "1.3.1", "Inputs with multiple labels confuse screen readers about which label applies.", "Ensure each input has exactly one associated label.", multiLabeled[0], null, multiLabeled); }
+  } catch(e) {}
+
+  // 4.1.2 Broken ARIA references
+  try {
+    const brokenRefs = [];
+    doc.querySelectorAll("[aria-labelledby],[aria-describedby]").forEach(el => {
+      ["aria-labelledby", "aria-describedby"].forEach(attr => {
+        const val = el.getAttribute(attr);
+        if (!val) return;
+        val.trim().split(/\s+/).forEach(refId => {
+          if (refId && !doc.getElementById(refId)) brokenRefs.push(el);
+        });
+      });
+    });
+    if (brokenRefs.length) {
+      const unique = []; const seen = new Set();
+      brokenRefs.forEach(el => { const k = (el.outerHTML || "").slice(0, 80); if (!seen.has(k)) { seen.add(k); unique.push(el); } });
+      ded += unique.length <= 2 ? 4 : 7;
+      push("serious", `Broken ARIA references (${unique.length})`, "4.1.2", "aria-labelledby or aria-describedby points to an ID that doesn't exist on the page.", "Ensure referenced IDs exist, or remove the ARIA attribute.", unique[0], null, unique);
+    }
+  } catch(e) {}
+
   // 1.3.5 Autocomplete
   try {
     const pf = Array.from(doc.querySelectorAll("input[type=text],input[type=email],input[type=tel]")).filter(i => {
@@ -164,7 +197,13 @@ function runLocalScan(doc, baseUrl) {
   // 1.4.1 Color contrast — requires live layout (getComputedStyle)
   if (typeof window !== "undefined" && doc === window.document) {
     try {
-      const textEls = Array.from(doc.querySelectorAll("p,h1,h2,h3,h4,h5,h6,a,button,label")).filter(el => !isHidden(el)).slice(0,120);
+      const textEls = Array.from(doc.querySelectorAll("p,h1,h2,h3,h4,h5,h6,a,button,label,span,li,td,th,div,strong,em,b,i,small,blockquote,figcaption,cite,dt,dd")).filter(el => {
+        if (isHidden(el)) return false;
+        const text = el.textContent || "";
+        if (!text.trim()) return false;
+        if (el.children.length > 0 && el.children[0].textContent === text) return false;
+        return true;
+      }).slice(0,200);
       const fails = [];
       function lum(r,g,b) {
         [r,g,b] = [r,g,b].map(v => { v /= 255; return v <= 0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055,2.4); });
