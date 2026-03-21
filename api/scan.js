@@ -52,6 +52,20 @@ const AXE_MAPPER_SCRIPT = `
       var wcag = axeWcag(p.tags) || p.id;
       pass(p.id, p.help);
     });
+    // Process incomplete results (axe couldn't determine pass/fail — treat as warnings)
+    if (axeRes.incomplete) {
+      axeRes.incomplete.forEach(function(v) {
+        if (v.id === 'image-alt' || v.id === 'color-contrast') {
+          var sev = v.impact === 'critical' ? 'serious' : 'moderate';
+          var wcag = axeWcag(v.tags) || v.id;
+          var nd = v.nodes[0]; var snippet = nd ? (nd.html || '').slice(0,120) : '';
+          var imgSrc = '';
+          if (/^<img /i.test(snippet)) { var sm = snippet.match(/src=["']([^"']+)["']/i); if (sm) imgSrc = sm[1]; }
+          ded += v.nodes.length <= 2 ? 3 : 5;
+          issues.push({ id: v.id + '-inc', sev: sev, wcag: wcag, title: v.help + ' (needs review' + (v.nodes.length > 1 ? ', ' + v.nodes.length : '') + ')', detail: v.description, snippet: snippet, imgSrc: imgSrc });
+        }
+      });
+    }
   }
 
   // ── CUSTOM CHECKS (axe-core does NOT cover these) ──
@@ -135,28 +149,36 @@ const AXE_MAPPER_SCRIPT = `
   var axeWcags = {};
   issues.forEach(function(i) { if (i.wcag) axeWcags[i.wcag] = true; });
 
-  // 1.1.1 Spacer/tracking images missing alt
-  function isTrackingPixel(img) {
-    var s = img.getAttribute('src') || '';
-    var w = img.getAttribute('width'), h = img.getAttribute('height');
-    if ((w === '1' || w === 1) && (h === '1' || h === 1)) return true;
-    return ['/pixel/','/track/','/beacon','/collect','adsct','bat.bing','trkn.us','arttrk.','adxcel','bidr.io','ispot.tv','mdhv.io','dmpxs.com'].some(function(p) { return s.includes(p); });
-  }
-  var spacerMiss = [];
+  // 1.1.1 Images missing alt (supplementary — catches spacer/small images axe misses)
+  var suppMiss = [];
+  var axeAltSnippets = {};
+  issues.forEach(function(i) { if (i.wcag === '1.1.1' && i.snippet) axeAltSnippets[i.snippet.slice(0,60)] = true; });
   Array.from(document.querySelectorAll('img')).forEach(function(img) {
-    if (isTrackingPixel(img)) return;
+    if (img.getAttribute('aria-hidden') === 'true') return;
     var role = img.getAttribute('role');
     if (role === 'presentation' || role === 'none') return;
-    if (img.getAttribute('aria-hidden') === 'true') return;
-    if (!img.hasAttribute('alt') || img.getAttribute('alt').trim() === '') {
-      var r = img.getBoundingClientRect();
-      if (r.width <= 1 && r.height <= 1) return;
-      spacerMiss.push(img);
+    if (!img.hasAttribute('alt')) {
+      var snip = (img.outerHTML || '').slice(0,60);
+      if (axeAltSnippets[snip]) return;
+      suppMiss.push(img);
     }
   });
-  if (spacerMiss.length && !axeWcags['1.1.1']) {
-    ded += spacerMiss.length <= 2 ? 4 : spacerMiss.length <= 5 ? 7 : 10;
-    push('1.1.1s','critical','1.1.1','Images missing alt text (' + spacerMiss.length + ')','Images with no alt attribute are invisible to screen readers.',spacerMiss[0]);
+  if (suppMiss.length) {
+    ded += suppMiss.length <= 2 ? 4 : suppMiss.length <= 5 ? 7 : 10;
+    push('1.1.1s','critical','1.1.1','Images missing alt attribute (' + suppMiss.length + ')','All images must have an alt attribute. Use alt="" for decorative/spacer images.',suppMiss[0]);
+  }
+
+  // 1.1.1 Long alt text warning (>125 chars)
+  var longAlts = Array.from(document.querySelectorAll('img[alt]')).filter(function(img) {
+    return (img.getAttribute('alt') || '').length > 125;
+  });
+  if (longAlts.length) push('1.1.1l','minor','1.1.1',longAlts.length + ' image(s) with long alt text (>125 chars)','Alt text should be concise. Long descriptions should use longdesc or aria-describedby.',longAlts[0]);
+
+  // 1.3.1 Fieldset without legend
+  var noLegend = Array.from(document.querySelectorAll('fieldset')).filter(function(fs) { return !fs.querySelector('legend'); });
+  if (noLegend.length) {
+    ded += noLegend.length <= 2 ? 3 : 5;
+    push('1.3.1f','serious','1.3.1',noLegend.length + ' fieldset(s) missing legend','Fieldsets must have a legend element to describe the group to screen readers.',noLegend[0]);
   }
 
   // 1.3.1 Multiple/conflicting form labels
@@ -606,6 +628,19 @@ const SCANNER_SCRIPT = `
   if(hasAnimations && !hasMotionQuery) { ded += 3; push('2.3.3','moderate','2.3.3','No prefers-reduced-motion media query','Animations should respect user motion preferences (WCAG 2.2).',null); }
   else if(hasMotionQuery) pass('2.3.3','prefers-reduced-motion supported');
 
+  // 1.1.1 Long alt text warning (>125 chars)
+  var longAlts = Array.from(document.querySelectorAll('img[alt]')).filter(function(img) {
+    return (img.getAttribute('alt') || '').length > 125;
+  });
+  if (longAlts.length) push('1.1.1l','minor','1.1.1',longAlts.length + ' image(s) with long alt text (>125 chars)','Alt text should be concise. Long descriptions should use longdesc or aria-describedby.',longAlts[0]);
+
+  // 1.3.1 Fieldset without legend
+  var noLegend = Array.from(document.querySelectorAll('fieldset')).filter(function(fs) { return !fs.querySelector('legend'); });
+  if (noLegend.length) {
+    ded += noLegend.length <= 2 ? 3 : 5;
+    push('1.3.1f','serious','1.3.1',noLegend.length + ' fieldset(s) missing legend','Fieldsets must have a legend element to describe the group to screen readers.',noLegend[0]);
+  }
+
   // Score calculation (bookmarklet-aligned)
   var critCount = issues.filter(function(i){return i.sev==='critical';}).length;
   var serCount  = issues.filter(function(i){return i.sev==='serious';}).length;
@@ -704,7 +739,8 @@ module.exports = async function handler(req, res) {
             'image-alt': { enabled: true },
             'form-field-multiple-labels': { enabled: true },
             'aria-valid-attr-value': { enabled: true },
-            'aria-allowed-attr': { enabled: true }
+            'aria-allowed-attr': { enabled: true },
+            'fieldset': { enabled: true }
           }
         });
       });

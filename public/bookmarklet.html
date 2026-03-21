@@ -308,7 +308,7 @@ async function runScan(){
   if(__axeRan&&typeof axe!=='undefined'){
     document.getElementById('bp-scan-txt').textContent='Running axe-core\\u2026';
     try{
-      var axeRes=await axe.run(document,{exclude:[['#beacon-panel'],['#beacon-overlay']],runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa','wcag22aa','best-practice']},rules:{'color-contrast':{enabled:true},'image-alt':{enabled:true},'form-field-multiple-labels':{enabled:true},'aria-valid-attr-value':{enabled:true},'aria-allowed-attr':{enabled:true}}});
+      var axeRes=await axe.run(document,{exclude:[['#beacon-panel'],['#beacon-overlay']],runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa','wcag22aa','best-practice']},rules:{'color-contrast':{enabled:true},'image-alt':{enabled:true},'form-field-multiple-labels':{enabled:true},'aria-valid-attr-value':{enabled:true},'aria-allowed-attr':{enabled:true},'fieldset':{enabled:true}}});
       function axeWcag(tags){for(var t=0;t<tags.length;t++){var m=tags[t].match(/^wcag(\\d)(\\d)(\\d+)$/);if(m)return m[1]+'.'+m[2]+'.'+parseInt(m[3]);}return '';}
       axeRes.violations.forEach(function(v){
         var sev=v.impact||'moderate';
@@ -325,6 +325,19 @@ async function runScan(){
         issues.push({sev:sev,title:v.help+(v.nodes.length>1?' ('+v.nodes.length+')':''),wcag:wcag,desc:v.description,fix:v.help+'.',el:snippet,imgSrc:imgSrc,imgSrcs:extraImgSrcs,instances:allInst});
       });
       axeRes.passes.forEach(function(p){var wcag=axeWcag(p.tags)||p.id;pass(p.help,wcag);});
+      // Process incomplete results (axe couldn't determine pass/fail — treat as warnings)
+      if(axeRes.incomplete){axeRes.incomplete.forEach(function(v){
+        if(v.id==='image-alt'||v.id==='color-contrast'){
+          var sev=v.impact==='critical'?'serious':'moderate';
+          var wcag=axeWcag(v.tags)||v.id;
+          var nd=v.nodes[0];var snippet=nd?(nd.html||'').slice(0,120):'';
+          var imgSrc='';
+          if(/^<img /i.test(snippet)){var sm=snippet.match(/src=["']([^"']+)["']/i);if(sm)imgSrc=sm[1];}
+          if(v.id==='image-alt'){v.nodes.forEach(function(n){var h=n.html||'';var ns=h.match(/src=["']([^"']+)["']/i);var src=ns?ns[1]:'';imgs.push({src:src,srcRaw:src.slice(0,80),missingAlt:!/\\balt=/.test(h)});});}
+          ded+=v.nodes.length<=2?3:5;
+          issues.push({sev:sev,title:v.help+' (needs review'+(v.nodes.length>1?', '+v.nodes.length:'')+')',wcag:wcag,desc:v.description,fix:v.help+'.',el:snippet,imgSrc:imgSrc,imgSrcs:[],instances:[]});
+        }
+      });}
     }catch(axeErr){__axeRan=false;}
   }
   document.getElementById('bp-scan-txt').textContent='Running checks\\u2026';
@@ -590,6 +603,14 @@ async function runScan(){
   // 1.4.10 Fixed pixel widths
   var fixedWidth=qsa('*').slice(0,500).filter(function(el){var s=el.getAttribute('style')||'';return/width\\s*:\\s*\\d{4,}px/.test(s);});
   if(fixedWidth.length)push('minor',fixedWidth.length+' element(s) with large fixed pixel width','1.4.10','Fixed pixel widths prevent content from reflowing on small screens.','Use relative units (%, vw) instead of fixed pixel widths.',fixedWidth[0]);
+
+  // 1.1.1 Long alt text warning (>125 chars)
+  var longAltsF=qsa('img[alt]').filter(function(img){return(img.getAttribute('alt')||'').length>125;});
+  if(longAltsF.length)push('minor',longAltsF.length+' image(s) with long alt text (>125 chars)','1.1.1','Alt text should be concise. Long descriptions should use longdesc or aria-describedby.','Keep alt text under 125 characters; use a longer description mechanism for complex images.',longAltsF[0],null,longAltsF);
+
+  // 1.3.1 Fieldset without legend
+  var noLegF=qsa('fieldset').filter(function(fs){return!fs.querySelector('legend');});
+  if(noLegF.length){ded+=noLegF.length<=2?3:5;push('serious',noLegF.length+' fieldset(s) missing legend','1.3.1','Fieldsets must have a legend element to describe the group to screen readers.','Add a <legend> as the first child of each <fieldset>.',noLegF[0],null,noLegF);}
   } // end fallback (original checks)
 
   // ── CUSTOM CHECKS (always run when axe active — axe does NOT cover these) ──
@@ -640,21 +661,34 @@ async function runScan(){
     // ── SUPPLEMENTARY CHECKS (catch what axe misses) ──
     var axeWcags={};issues.forEach(function(i){if(i.wcag)axeWcags[i.wcag]=true;});
 
-    // 1.1.1 Spacer/tracking images missing alt
-    var spacerMiss=[];
+    // 1.1.1 Images missing alt (supplementary — catches spacer/small images axe misses)
+    var suppMiss=[];
+    var axeAltEls={};
+    issues.forEach(function(i){if(i.wcag==='1.1.1'&&i.instances){i.instances.forEach(function(inst){if(inst.el)axeAltEls[inst.el.slice(0,60)]=true;});}if(i.wcag==='1.1.1'&&i.el)axeAltEls[i.el.slice(0,60)]=true;});
     qsa('img').forEach(function(img){
-      if(isTrackingPixel(img))return;
+      if(img.getAttribute('aria-hidden')==='true')return;
       var role=img.getAttribute('role');
       if(role==='presentation'||role==='none')return;
-      if(img.getAttribute('aria-hidden')==='true')return;
-      if(!img.hasAttribute('alt')||img.getAttribute('alt').trim()===''){
-        var r=img.getBoundingClientRect();
-        if(r.width<=1&&r.height<=1)return;
-        spacerMiss.push(img);
-        imgs.push({src:img.src||'',srcRaw:(img.getAttribute('src')||'').slice(0,80),missingAlt:!img.hasAttribute('alt')});
+      if(!img.hasAttribute('alt')){
+        var snip=(img.outerHTML||'').slice(0,60);
+        if(axeAltEls[snip])return;
+        suppMiss.push(img);
+        imgs.push({src:img.src||'',srcRaw:(img.getAttribute('src')||'').slice(0,80),missingAlt:true});
       }
     });
-    if(spacerMiss.length&&!axeWcags['1.1.1']){ded+=spacerMiss.length<=2?4:spacerMiss.length<=5?7:10;push('critical','Images missing alt text ('+spacerMiss.length+')','1.1.1','Images with no alt attribute are invisible to screen readers.','Add descriptive alt text to each image, or alt="" for decorative images.',spacerMiss[0],spacerMiss.map(function(m){try{return m.src||'';}catch(e){return '';}}),spacerMiss);}
+    if(suppMiss.length){ded+=suppMiss.length<=2?4:suppMiss.length<=5?7:10;push('critical','Images missing alt attribute ('+suppMiss.length+')','1.1.1','All images must have an alt attribute. Use alt="" for decorative/spacer images.','Add alt text to each image, or alt="" if purely decorative.',suppMiss[0],suppMiss.map(function(m){try{return m.src||'';}catch(e){return '';}}),suppMiss);}
+
+    // 1.1.1 Long alt text warning (>125 chars)
+    var longAlts=[];
+    qsa('img[alt]').forEach(function(img){
+      var alt=img.getAttribute('alt')||'';
+      if(alt.length>125)longAlts.push(img);
+    });
+    if(longAlts.length)push('minor',longAlts.length+' image(s) with long alt text (>125 chars)','1.1.1','Alt text should be concise. Long descriptions should use longdesc or aria-describedby.','Keep alt text under 125 characters; use a longer description mechanism for complex images.',longAlts[0],null,longAlts);
+
+    // 1.3.1 Fieldset without legend
+    var noLegend=qsa('fieldset').filter(function(fs){return!fs.querySelector('legend');});
+    if(noLegend.length){ded+=noLegend.length<=2?3:5;push('serious',noLegend.length+' fieldset(s) missing legend','1.3.1','Fieldsets must have a legend element to describe the group to screen readers.','Add a <legend> as the first child of each <fieldset>.',noLegend[0],null,noLegend);}
 
     // 1.3.1 Multiple/conflicting form labels
     var multiLab=[];

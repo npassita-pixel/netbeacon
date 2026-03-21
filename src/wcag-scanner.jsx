@@ -51,7 +51,16 @@ async function runAxeOnHtml(html) {
       setTimeout(async () => {
         try {
           const results = await axeCore.run(iframeDoc, {
-            resultTypes: ["violations", "passes", "incomplete"]
+            resultTypes: ["violations", "passes", "incomplete"],
+            runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa", "best-practice"] },
+            rules: {
+              "color-contrast": { enabled: true },
+              "image-alt": { enabled: true },
+              "form-field-multiple-labels": { enabled: true },
+              "aria-valid-attr-value": { enabled: true },
+              "aria-allowed-attr": { enabled: true },
+              "fieldset": { enabled: true }
+            }
           });
           document.body.removeChild(iframe);
           resolve(results);
@@ -123,6 +132,29 @@ function mapAxeResults(axeResults) {
     const wcag = axeWcag(p.tags) || p.id;
     passes.push({ title: p.help, wcag });
   });
+
+  // Process incomplete results (axe couldn't determine pass/fail — treat as warnings)
+  if (axeResults.incomplete) {
+    axeResults.incomplete.forEach(v => {
+      if (v.id === "image-alt" || v.id === "color-contrast") {
+        const sev = v.impact === "critical" ? "serious" : "moderate";
+        const wcag = axeWcag(v.tags) || v.id;
+        const principle = principleMap[wcag.split(".")[0]] || "Robust";
+        const nd = v.nodes[0];
+        const snippet = nd ? (nd.html || "").slice(0, 200) : "";
+        ded += v.nodes.length <= 2 ? 3 : 5;
+        issues.push({
+          severity: sev,
+          title: v.help + ` (needs review${v.nodes.length > 1 ? ", " + v.nodes.length : ""})`,
+          wcag, principle,
+          description: v.description,
+          fix: v.help + ".",
+          element: snippet,
+          imgSrc: "", imgSrcs: [], instances: []
+        });
+      }
+    });
+  }
 
   return { issues, passes, ded };
 }
@@ -548,6 +580,18 @@ function runLocalScan(doc, baseUrl) {
 
   // 2.3.3 Reduced motion (HTML scan note)
   pass("prefers-reduced-motion (check via live page scan)", "2.3.3");
+
+  // 1.1.1 Long alt text warning (>125 chars)
+  try {
+    const longAlts = Array.from(doc.querySelectorAll("img[alt]")).filter(img => (img.getAttribute("alt") || "").length > 125);
+    if (longAlts.length) push("minor", `${longAlts.length} image(s) with long alt text (>125 chars)`, "1.1.1", "Alt text should be concise. Long descriptions should use longdesc or aria-describedby.", "Keep alt text under 125 characters; use a longer description mechanism for complex images.", longAlts[0], null, longAlts);
+  } catch(e) {}
+
+  // 1.3.1 Fieldset without legend
+  try {
+    const noLegend = Array.from(doc.querySelectorAll("fieldset")).filter(fs => !fs.querySelector("legend"));
+    if (noLegend.length) { ded += noLegend.length <= 2 ? 3 : 5; push("serious", `${noLegend.length} fieldset(s) missing legend`, "1.3.1", "Fieldsets must have a legend element to describe the group to screen readers.", "Add a <legend> as the first child of each <fieldset>.", noLegend[0], null, noLegend); }
+  } catch(e) {}
 
   // Score calculation
   const critCount = issues.filter(i => i.severity === "critical").length;
