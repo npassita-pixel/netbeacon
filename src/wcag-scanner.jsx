@@ -113,8 +113,8 @@ function mapAxeResults(axeResults) {
         instances.push({ element: h, imgSrc: iS });
       });
     }
-    if (sev === "critical") ded += v.nodes.length <= 2 ? 5 : v.nodes.length <= 5 ? 8 : 10;
-    else if (sev === "serious") ded += v.nodes.length <= 2 ? 4 : v.nodes.length <= 5 ? 6 : 8;
+    if (sev === "critical") ded += v.nodes.length <= 2 ? 5 : v.nodes.length <= 5 ? 8 : v.nodes.length <= 15 ? 12 : 16;
+    else if (sev === "serious") ded += v.nodes.length <= 2 ? 4 : v.nodes.length <= 5 ? 6 : v.nodes.length <= 15 ? 10 : 14;
     else if (sev === "moderate") ded += v.nodes.length <= 3 ? 2 : 4;
     else ded += 1;
     issues.push({
@@ -598,12 +598,14 @@ function runLocalScan(doc, baseUrl) {
   const serCount  = issues.filter(i => i.severity === "serious").length;
   const totalChecks = issues.length + passes.length;
   const passRatio = totalChecks > 0 ? passes.length / totalChecks : 0;
-  let rawScore = 100 - ded + (passRatio * 15);
-  if      (critCount >= 3) rawScore = Math.min(rawScore, 30);
-  else if (critCount >= 2) rawScore = Math.min(rawScore, 45);
-  else if (critCount === 1) rawScore = Math.min(rawScore, 62);
-  else if (serCount  >= 3) rawScore = Math.min(rawScore, 70);
-  else if (serCount  >= 1) rawScore = Math.min(rawScore, 82);
+  let rawScore = 100 - ded + (passRatio * 5);
+  if      (critCount >= 3) rawScore = Math.min(rawScore, 25);
+  else if (critCount >= 2) rawScore = Math.min(rawScore, 40);
+  else if (critCount === 1) rawScore = Math.min(rawScore, 55);
+  if      (serCount >= 6) rawScore = Math.min(rawScore, 35);
+  else if (serCount >= 4) rawScore = Math.min(rawScore, 45);
+  else if (serCount >= 2) rawScore = Math.min(rawScore, 60);
+  else if (serCount >= 1) rawScore = Math.min(rawScore, 72);
   const score = Math.max(0, Math.min(issues.length > 0 ? 99 : 100, Math.round(rawScore)));
 
   const stats = { critical:0, serious:0, moderate:0, minor:0 };
@@ -1013,12 +1015,14 @@ export default function App() {
         const serC = mergedIssues.filter(i => i.severity === "serious").length;
         const totalC = mergedIssues.length + mergedPasses.length;
         const pRatio = totalC > 0 ? mergedPasses.length / totalC : 0;
-        let rawS = 100 - mergedDed + (pRatio * 15);
-        if (critC >= 3) rawS = Math.min(rawS, 30);
-        else if (critC >= 2) rawS = Math.min(rawS, 45);
-        else if (critC === 1) rawS = Math.min(rawS, 62);
-        else if (serC >= 3) rawS = Math.min(rawS, 70);
-        else if (serC >= 1) rawS = Math.min(rawS, 82);
+        let rawS = 100 - mergedDed + (pRatio * 5);
+        if (critC >= 3) rawS = Math.min(rawS, 25);
+        else if (critC >= 2) rawS = Math.min(rawS, 40);
+        else if (critC === 1) rawS = Math.min(rawS, 55);
+        if (serC >= 6) rawS = Math.min(rawS, 35);
+        else if (serC >= 4) rawS = Math.min(rawS, 45);
+        else if (serC >= 2) rawS = Math.min(rawS, 60);
+        else if (serC >= 1) rawS = Math.min(rawS, 72);
         const mergedScore = Math.max(0, Math.min(mergedIssues.length > 0 ? 99 : 100, Math.round(rawS)));
         const sevOrder = { critical: 0, serious: 1, moderate: 2, minor: 3 };
         mergedIssues.sort((a, b) => (sevOrder[a.severity] || 3) - (sevOrder[b.severity] || 3));
@@ -1146,10 +1150,11 @@ export default function App() {
             const sC = mIssues.filter(i => i.severity === "serious").length;
             const tC = mIssues.length + mPasses.length;
             const pR = tC > 0 ? mPasses.length / tC : 0;
-            let rS = 100 - mDed + (pR * 15);
-            if (cC >= 3) rS = Math.min(rS, 30); else if (cC >= 2) rS = Math.min(rS, 45);
-            else if (cC === 1) rS = Math.min(rS, 62); else if (sC >= 3) rS = Math.min(rS, 70);
-            else if (sC >= 1) rS = Math.min(rS, 82);
+            let rS = 100 - mDed + (pR * 5);
+            if (cC >= 3) rS = Math.min(rS, 25); else if (cC >= 2) rS = Math.min(rS, 40);
+            else if (cC === 1) rS = Math.min(rS, 55);
+            if (sC >= 6) rS = Math.min(rS, 35); else if (sC >= 4) rS = Math.min(rS, 45);
+            else if (sC >= 2) rS = Math.min(rS, 60); else if (sC >= 1) rS = Math.min(rS, 72);
             const mScore = Math.max(0, Math.min(mIssues.length > 0 ? 99 : 100, Math.round(rS)));
             const sOrd = { critical: 0, serious: 1, moderate: 2, minor: 3 };
             mIssues.sort((a, b) => (sOrd[a.severity] || 3) - (sOrd[b.severity] || 3));

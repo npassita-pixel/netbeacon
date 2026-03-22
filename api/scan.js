@@ -42,8 +42,8 @@ const AXE_MAPPER_SCRIPT = `
         var sm = snippet.match(/src=["']([^"']+)["']/i);
         if (sm) imgSrc = sm[1];
       }
-      if (sev === 'critical') ded += v.nodes.length <= 2 ? 5 : v.nodes.length <= 5 ? 8 : 10;
-      else if (sev === 'serious') ded += v.nodes.length <= 2 ? 4 : v.nodes.length <= 5 ? 6 : 8;
+      if (sev === 'critical') ded += v.nodes.length <= 2 ? 5 : v.nodes.length <= 5 ? 8 : v.nodes.length <= 15 ? 12 : 16;
+      else if (sev === 'serious') ded += v.nodes.length <= 2 ? 4 : v.nodes.length <= 5 ? 6 : v.nodes.length <= 15 ? 10 : 14;
       else if (sev === 'moderate') ded += v.nodes.length <= 3 ? 2 : 4;
       else ded += 1;
       issues.push({ id: v.id, sev: sev, wcag: wcag, title: v.help + (v.nodes.length > 1 ? ' (' + v.nodes.length + ')' : ''), detail: v.description, snippet: snippet, imgSrc: imgSrc });
@@ -151,15 +151,15 @@ const AXE_MAPPER_SCRIPT = `
 
   // 1.1.1 Images missing alt (supplementary — catches spacer/small images axe misses)
   var suppMiss = [];
-  var axeAltSnippets = {};
-  issues.forEach(function(i) { if (i.wcag === '1.1.1' && i.snippet) axeAltSnippets[i.snippet.slice(0,60)] = true; });
+  var axeAltSrcs = {};
+  issues.forEach(function(i) { if (i.wcag === '1.1.1' && i.imgSrc) axeAltSrcs[i.imgSrc] = true; });
   Array.from(document.querySelectorAll('img')).forEach(function(img) {
     if (img.getAttribute('aria-hidden') === 'true') return;
     var role = img.getAttribute('role');
     if (role === 'presentation' || role === 'none') return;
     if (!img.hasAttribute('alt')) {
-      var snip = (img.outerHTML || '').slice(0,60);
-      if (axeAltSnippets[snip]) return;
+      var s = img.src || img.getAttribute('src') || '';
+      if (s && axeAltSrcs[s]) return;
       suppMiss.push(img);
     }
   });
@@ -213,36 +213,37 @@ const AXE_MAPPER_SCRIPT = `
     push('4.1.2r','serious','4.1.2',uniqR.length + ' broken ARIA reference(s)','aria-labelledby or aria-describedby points to an ID that does not exist on the page.',uniqR[0]);
   }
 
-  // 1.4.3 Color contrast (supplementary — catches what axe misses)
-  if (!axeWcags['1.4.3']) {
-    var cFails = [];
-    function getLum(r,g,b) { var a = [r,g,b].map(function(v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.0722; }
-    function parseC(c) { var m = c.match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)/); return m ? [parseInt(m[1]), parseInt(m[2]), parseInt(m[3])] : null; }
-    function effBg(el) { var node = el; while (node && node !== document.body.parentElement) { var cs = window.getComputedStyle(node); var bg = parseC(cs.backgroundColor); if (bg && cs.backgroundColor !== 'transparent' && cs.backgroundColor !== 'rgba(0, 0, 0, 0)') return bg; node = node.parentElement; } return [255,255,255]; }
-    var tEls = Array.from(document.querySelectorAll('p,span,a,li,td,th,label,button,h1,h2,h3,h4,h5,h6,div,strong,em,b,i,small')).filter(function(el) {
-      var cs = window.getComputedStyle(el);
-      if (cs.display === 'none' || cs.visibility === 'hidden') return false;
-      var text = el.textContent || '';
-      if (!text.trim()) return false;
-      if (el.children.length > 0 && el.children[0].textContent === text) return false;
-      return true;
-    }).slice(0,200);
-    tEls.forEach(function(el) {
-      var cs = window.getComputedStyle(el);
-      var fg = parseC(cs.color); if (!fg) return;
-      var bg = effBg(el);
-      var L1 = getLum(fg[0],fg[1],fg[2]), L2 = getLum(bg[0],bg[1],bg[2]);
-      var ratio = (Math.max(L1,L2) + 0.05) / (Math.min(L1,L2) + 0.05);
-      var fontSize = parseFloat(cs.fontSize);
-      var isBold = parseInt(cs.fontWeight) >= 700;
-      var isLarge = fontSize >= 24 || (isBold && fontSize >= 18.66);
-      var required = isLarge ? 3 : 4.5;
-      if (ratio < required) cFails.push({ el: el, ratio: ratio.toFixed(2), required: required });
-    });
-    if (cFails.length) {
-      ded += cFails.length <= 3 ? 5 : cFails.length <= 8 ? 8 : 12;
-      push('1.4.3s','serious','1.4.3',cFails.length + ' color contrast failure(s)','Text must have ' + cFails[0].required + ':1 contrast ratio. Found ' + cFails[0].ratio + ':1.',cFails[0].el);
-    }
+  // 1.4.3 Color contrast (always runs — dedup elements already reported by axe)
+  var cFails = [];
+  function getLum(r,g,b) { var a = [r,g,b].map(function(v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.0722; }
+  function parseC(c) { var m = c.match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)/); return m ? [parseInt(m[1]), parseInt(m[2]), parseInt(m[3])] : null; }
+  function effBg(el) { var node = el; while (node && node !== document.body.parentElement) { var cs = window.getComputedStyle(node); var bg = parseC(cs.backgroundColor); if (bg && cs.backgroundColor !== 'transparent' && cs.backgroundColor !== 'rgba(0, 0, 0, 0)') return bg; node = node.parentElement; } return [255,255,255]; }
+  var axeContrastSnippets = {};
+  issues.forEach(function(i) { if (i.wcag === '1.4.3' && i.snippet) axeContrastSnippets[i.snippet.slice(0,60)] = true; });
+  var tEls = Array.from(document.querySelectorAll('p,span,a,li,td,th,label,button,h1,h2,h3,h4,h5,h6,div,strong,em,b,i,small')).filter(function(el) {
+    var cs = window.getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+    var text = el.textContent || '';
+    if (!text.trim()) return false;
+    if (el.children.length > 0 && el.children[0].textContent === text) return false;
+    return true;
+  }).slice(0,200);
+  tEls.forEach(function(el) {
+    var cs = window.getComputedStyle(el);
+    var fg = parseC(cs.color); if (!fg) return;
+    var bg = effBg(el);
+    var L1 = getLum(fg[0],fg[1],fg[2]), L2 = getLum(bg[0],bg[1],bg[2]);
+    var ratio = (Math.max(L1,L2) + 0.05) / (Math.min(L1,L2) + 0.05);
+    var fontSize = parseFloat(cs.fontSize);
+    var isBold = parseInt(cs.fontWeight) >= 700;
+    var isLarge = fontSize >= 24 || (isBold && fontSize >= 18.66);
+    var required = isLarge ? 3 : 4.5;
+    if (ratio < required) { var snip = (el.outerHTML || '').slice(0,60); if (!axeContrastSnippets[snip]) cFails.push({ el: el, ratio: ratio.toFixed(2), required: required }); }
+  });
+  if (cFails.length) {
+    ded += cFails.length <= 3 ? 5 : cFails.length <= 8 ? 8 : 12;
+    push('1.4.3s','serious','1.4.3',cFails.length + ' color contrast failure(s)','Text must have ' + cFails[0].required + ':1 contrast ratio. Found ' + cFails[0].ratio + ':1.',cFails[0].el);
+  }
   }
 
   // Score calculation (bookmarklet-aligned)
@@ -250,12 +251,14 @@ const AXE_MAPPER_SCRIPT = `
   var serCount  = issues.filter(function(i) { return i.sev === 'serious'; }).length;
   var totalChecks = issues.length + passes.length;
   var passRatio = totalChecks > 0 ? passes.length / totalChecks : 0;
-  var rawScore = 100 - ded + (passRatio * 15);
-  if      (critCount >= 3) rawScore = Math.min(rawScore, 30);
-  else if (critCount >= 2) rawScore = Math.min(rawScore, 45);
-  else if (critCount === 1) rawScore = Math.min(rawScore, 62);
-  else if (serCount  >= 3) rawScore = Math.min(rawScore, 70);
-  else if (serCount  >= 1) rawScore = Math.min(rawScore, 82);
+  var rawScore = 100 - ded + (passRatio * 5);
+  if      (critCount >= 3) rawScore = Math.min(rawScore, 25);
+  else if (critCount >= 2) rawScore = Math.min(rawScore, 40);
+  else if (critCount === 1) rawScore = Math.min(rawScore, 55);
+  if      (serCount >= 6) rawScore = Math.min(rawScore, 35);
+  else if (serCount >= 4) rawScore = Math.min(rawScore, 45);
+  else if (serCount >= 2) rawScore = Math.min(rawScore, 60);
+  else if (serCount >= 1) rawScore = Math.min(rawScore, 72);
   var score = Math.max(0, Math.min(issues.length > 0 ? 99 : 100, Math.round(rawScore)));
 
   // Image counting
@@ -646,12 +649,14 @@ const SCANNER_SCRIPT = `
   var serCount  = issues.filter(function(i){return i.sev==='serious';}).length;
   var totalChecks = issues.length + passes.length;
   var passRatio = totalChecks > 0 ? passes.length / totalChecks : 0;
-  var rawScore = 100 - ded + (passRatio * 15);
-  if      (critCount >= 3) rawScore = Math.min(rawScore, 30);
-  else if (critCount >= 2) rawScore = Math.min(rawScore, 45);
-  else if (critCount === 1) rawScore = Math.min(rawScore, 62);
-  else if (serCount  >= 3) rawScore = Math.min(rawScore, 70);
-  else if (serCount  >= 1) rawScore = Math.min(rawScore, 82);
+  var rawScore = 100 - ded + (passRatio * 5);
+  if      (critCount >= 3) rawScore = Math.min(rawScore, 25);
+  else if (critCount >= 2) rawScore = Math.min(rawScore, 40);
+  else if (critCount === 1) rawScore = Math.min(rawScore, 55);
+  if      (serCount >= 6) rawScore = Math.min(rawScore, 35);
+  else if (serCount >= 4) rawScore = Math.min(rawScore, 45);
+  else if (serCount >= 2) rawScore = Math.min(rawScore, 60);
+  else if (serCount >= 1) rawScore = Math.min(rawScore, 72);
   var score = Math.max(0, Math.min(issues.length > 0 ? 99 : 100, Math.round(rawScore)));
 
   // Image counting for frontend display
