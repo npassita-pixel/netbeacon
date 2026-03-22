@@ -24,6 +24,7 @@ const AXE_MAPPER_SCRIPT = `
   function pass(id, title) { passes.push({ id: id, title: title }); }
 
   // Map axe-core results (window.__axeResults set by runner)
+  var axeContrastNodeHtml = {};
   var axeRes = window.__axeResults;
   if (axeRes) {
     function axeWcag(tags) {
@@ -34,6 +35,7 @@ const AXE_MAPPER_SCRIPT = `
       return '';
     }
     axeRes.violations.forEach(function(v) {
+      if (v.id === 'color-contrast') { v.nodes.forEach(function(n) { var h = (n.html || '').slice(0,60); if (h) axeContrastNodeHtml[h] = true; }); }
       var sev = v.impact || 'moderate';
       var wcag = axeWcag(v.tags) || v.id;
       var nd = v.nodes[0]; var snippet = nd ? (nd.html || '').slice(0,120) : '';
@@ -213,13 +215,11 @@ const AXE_MAPPER_SCRIPT = `
     push('4.1.2r','serious','4.1.2',uniqR.length + ' broken ARIA reference(s)','aria-labelledby or aria-describedby points to an ID that does not exist on the page.',uniqR[0]);
   }
 
-  // 1.4.3 Color contrast (always runs — dedup elements already reported by axe)
+  // 1.4.3 Color contrast (always runs — dedup against ALL axe contrast nodes)
   var cFails = [];
   function getLum(r,g,b) { var a = [r,g,b].map(function(v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return a[0] * 0.2126 + a[1] * 0.7152 + a[2] * 0.0722; }
   function parseC(c) { var m = c.match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)/); return m ? [parseInt(m[1]), parseInt(m[2]), parseInt(m[3])] : null; }
   function effBg(el) { var node = el; while (node && node !== document.body.parentElement) { var cs = window.getComputedStyle(node); var bg = parseC(cs.backgroundColor); if (bg && cs.backgroundColor !== 'transparent' && cs.backgroundColor !== 'rgba(0, 0, 0, 0)') return bg; node = node.parentElement; } return [255,255,255]; }
-  var axeContrastSnippets = {};
-  issues.forEach(function(i) { if (i.wcag === '1.4.3' && i.snippet) axeContrastSnippets[i.snippet.slice(0,60)] = true; });
   var tEls = Array.from(document.querySelectorAll('p,span,a,li,td,th,label,button,h1,h2,h3,h4,h5,h6,div,strong,em,b,i,small')).filter(function(el) {
     var cs = window.getComputedStyle(el);
     if (cs.display === 'none' || cs.visibility === 'hidden') return false;
@@ -238,11 +238,11 @@ const AXE_MAPPER_SCRIPT = `
     var isBold = parseInt(cs.fontWeight) >= 700;
     var isLarge = fontSize >= 24 || (isBold && fontSize >= 18.66);
     var required = isLarge ? 3 : 4.5;
-    if (ratio < required) { var snip = (el.outerHTML || '').slice(0,60); if (!axeContrastSnippets[snip]) cFails.push({ el: el, ratio: ratio.toFixed(2), required: required }); }
+    if (ratio < required) { var snip = (el.outerHTML || '').slice(0,60); if (!axeContrastNodeHtml[snip]) cFails.push({ el: el, ratio: ratio.toFixed(2), required: required }); }
   });
   if (cFails.length) {
     ded += cFails.length <= 3 ? 5 : cFails.length <= 8 ? 8 : 12;
-    push('1.4.3s','serious','1.4.3',cFails.length + ' color contrast failure(s)','Text must have ' + cFails[0].required + ':1 contrast ratio. Found ' + cFails[0].ratio + ':1.',cFails[0].el);
+    push('1.4.3s','serious','1.4.3',cFails.length + ' additional color contrast failure(s)','Text must have ' + cFails[0].required + ':1 contrast ratio. Found ' + cFails[0].ratio + ':1.',cFails[0].el);
   }
   }
 
